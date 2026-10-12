@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Entorno virtual (lo crea uv sync)
+.venv/
+
+# Caches de herramientas
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Secretos: el .env real nunca se commitea (ver .env.example)
+.env
+
+# Datos: facturas reales, sintéticas generadas, scraping
+data/
+
+# PDFs: solo se permiten los fixtures de tests
+*.pdf
+!**/tests/fixtures/**/*.pdf
+
+# Editor / SO
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Configuración local de Claude Code (la compartida en .claude/settings.json sí se commitea)
+.claude/settings.local.json
