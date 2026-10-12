@@ -1,0 +1,5 @@
+# Raíz del workspace de uv: coordina los paquetes de packages/.
+# Todos comparten un único uv.lock y un único .venv/ en esta carpeta.
+
+[tool.uv.workspace]
+members = ["packages/*"]

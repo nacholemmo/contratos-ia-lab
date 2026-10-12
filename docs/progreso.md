@@ -45,3 +45,8 @@ Plantilla para cada entrada (copiar y completar):
 - **Qué construí:** repo git en `main` con el primer commit (docs, skills de Claude Code, `.gitignore`, `.env.example`, `.python-version`). Verificado con `git check-ignore -v` que `.env`, `.venv/` y `data/` quedan afuera y que los PDFs de `tests/fixtures/` se permiten por la negación.
 - **Qué aprendí:** _(completar en mis palabras)_
 - **Dudas abiertas:**
+
+### 2026-10-12 — Fase 0, paso 3: workspace de uv
+- **Qué construí:** `pyproject.toml` raíz como workspace **virtual** (solo `[tool.uv.workspace]` con `members = ["packages/*"]`, sin `[project]`). `uv sync` crea `.venv/` con Python 3.12.8 y genera `uv.lock`. La advertencia "No `requires-python` value found" es esperada hasta que exista el primer miembro (`core`, paso 4).
+- **Qué aprendí:** _(completar en mis palabras)_
+- **Dudas abiertas:**
