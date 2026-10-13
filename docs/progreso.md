@@ -70,4 +70,5 @@ Plantilla para cada entrada (copiar y completar):
 ### 2026-10-13 — Fase 0, paso 4: ruff y pytest
 - **Qué construí:** ruff 0.17.0 y pytest 9.1.1 en `[dependency-groups] dev` del `pyproject.toml` raíz (`uv add --dev`). ruff: `target-version = "py312"`, `line-length = 100`, `archive/` excluido con `extend-exclude`, reglas `E, F, I, UP, B, SIM, C4, T20`. pytest: `testpaths = ["packages"]`, `--strict-markers` y los marcadores `slow` y `network` excluidos por defecto. Verificado: `ruff check .` sin errores, `ruff format --check .` con 14 archivos ya formateados y `pytest` cargando la configuración (todavía 0 tests, código 5).
 - **Qué aprendí:** toda la configuración inicial con uv: instalar en el proyecto los paquetes necesarios y las herramientas de desarrollo para validar (pytest) y para lint y formato (ruff).
+  - Con `uv add --dev`, ruff y pytest quedan en `[dependency-groups] dev` del pyproject raíz y no en las dependencias de `core`: son herramientas para desarrollar y no viajan con el paquete.
 - **Dudas abiertas:** ¿activar `DTZ` (fechas con zona horaria) cuando empiecen los cálculos de fechas?
