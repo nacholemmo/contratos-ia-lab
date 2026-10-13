@@ -1,14 +1,21 @@
 # Fuentes de datos
 
-## Comprobantes
+## Contratos
 
-- **Mis Comprobantes de ARCA**: export CSV/Excel de comprobantes recibidos y emitidos. El CSV sirve como ground truth para evaluar la extracción de los PDFs. Privado: va en `data/private/`, nunca se commitea (Fase 1C).
-- **Tickets en papel**: fotos propias, etiquetadas a mano. Privadas.
-- **Datasets públicos**: CORD (Hugging Face `naver-clova-ix/cord-v1`, CC BY 4.0) y SROIE, para volumen. No tienen formato argentino.
-- **Facturas sintéticas**: generadas en la Fase 1A (`packages/invoice-generator`), cada una con su JSON de ground truth. Son las únicas que se usan en el repo público y en las demos.
+- **Sintéticos** (Fase 1A, `packages/contract-generator`): para desarrollo y evals, cada uno con su JSON de ground truth. Son los únicos que se usan en el repo público y en las demos.
+- **Reales**: solo con consentimiento de la inmobiliaria, anonimizados y en `data/private/`. Nunca se commitean.
+
+## Índices
+
+- **IPC** del INDEC e **ICL** del BCRA, descargados y cacheados con fecha de descarga (Fase 1B, `packages/sources`).
+- **Índice Casa Propia**, para los contratos de la reforma de fines de 2023.
 
 ## Normativa
 
-- **Boletín Oficial** y **biblioteca normativa de ARCA** (Fase 1B, `packages/arca-scraper`).
-- Guardar las relaciones entre normas (qué modifica a qué) y la vigencia de cada una.
-- Scraping responsable: respetar `robots.txt` y términos de uso, pausas entre requests, User-Agent identificable y caché local en `data/raw/` para bajar cada documento una sola vez.
+- **Código Civil y Comercial**, capítulo de locación, en InfoLEG.
+- **DNU 70/2023**, en el Boletín Oficial.
+- **Ley 27.551**, para contratos anteriores al DNU.
+
+## Scraping responsable
+
+Respetar `robots.txt` y términos de uso, pausas entre requests, caché local para bajar cada documento una sola vez y un User-Agent identificable.

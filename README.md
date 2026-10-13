@@ -1,13 +1,14 @@
-# facturas-ai-lab
+# contratos-ia-lab
 
-Laboratorio personal de **aprendizaje de AI Engineering** en Python.
+Laboratorio de **aprendizaje de AI Engineering** en Python y MVP de un sistema de gestión de contratos de alquiler para inmobiliarias.
 
-Paso a paso, construyo un asistente que lee facturas y tickets argentinos, carga los datos y responde preguntas sobre gastos y normativa de ARCA. Cada fase del proyecto cubre un concepto: datos sintéticos, extracción con visión, RAG, agentes y MCP, evals, fine-tuning, inferencia y seguridad.
+La IA lee contratos y documentos (DNI, recibos de sueldo, garantías, seguros), extrae los datos con su evidencia y un administrador los confirma. Un motor determinístico calcula los aumentos (IPC, ICL, Casa Propia) y los vencimientos, y el sistema avisa a tiempo. Regla de orden: primero la IA, después el producto.
 
 Es un proyecto de aprendizaje: el foco está en entender cada pieza, no en terminar rápido.
 
 - Hoja de ruta: [docs/roadmap.md](docs/roadmap.md)
 - Progreso: [docs/progreso.md](docs/progreso.md)
 - Fuentes de datos: [docs/fuentes.md](docs/fuentes.md)
+- Validación con inmobiliarias: [docs/validacion.md](docs/validacion.md)
 
-> El repo solo contiene facturas sintéticas. Nunca se suben facturas reales ni CUITs de terceros.
+> El repo solo contiene datos sintéticos. Nunca se suben contratos reales ni datos personales de terceros (Ley 25.326).

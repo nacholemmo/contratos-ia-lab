@@ -1,4 +1,4 @@
-# Progreso — facturas-ai-lab
+# Progreso — contratos-ia-lab
 
 Registro de cada paso o fase cerrada. Lo actualiza Claude al cerrar un paso y `/cerrar-fase` al cerrar una fase.
 "Qué aprendí" va en mis palabras.
@@ -7,19 +7,22 @@ Registro de cada paso o fase cerrada. Lo actualiza Claude al cerrar un paso y `/
 
 | Fase | Estado | Inicio | Cierre |
 |------|--------|--------|--------|
-| 0 — Setup del laboratorio | en curso | 2026-10-12 | |
-| 1A — Generador de facturas sintéticas | pendiente | | |
-| 1B — Scraper de normativa ARCA | pendiente | | |
-| 1C — Datos reales (opcional) | pendiente | | |
-| 2 — Extracción con visión | pendiente | | |
-| 3 — Búsqueda y RAG | pendiente | | |
-| 4 — Agente y MCP | pendiente | | |
-| 5 — App y deploy | pendiente | | |
-| 6 — Evals y observabilidad | pendiente | | |
-| 7 — Fine-tuning | pendiente | | |
-| 8 — Inferencia y costos | pendiente | | |
-| 9 — Seguridad | pendiente | | |
-| 10 — Cierre y portfolio | pendiente | | |
+| 0 — Setup del laboratorio | en curso (pasos 1–3 hechos) | 2026-10-12 | |
+| 1A — Generador de contratos sintéticos | pendiente | | |
+| 1B — Series de índices y normativa | pendiente | | |
+| 1C — Documentos complementarios sintéticos | pendiente | | |
+| 2 — Extracción de contratos | pendiente | | |
+| 3 — Clasificación de documentos y régimen | pendiente | | |
+| 4 — Motor de ajustes y eventos | pendiente | | |
+| 5 — RAG sobre contrato y normativa | pendiente | | |
+| 6 — Agente y MCP | pendiente | | |
+| 7 — App web, revisión humana y cartera | pendiente | | |
+| 8 — Bot de WhatsApp y avisos | pendiente | | |
+| 9 — Evals y observabilidad | pendiente | | |
+| 10 — Fine-tuning (opcional) | pendiente | | |
+| 11 — Inferencia y costos | pendiente | | |
+| 12 — Seguridad y datos personales | pendiente | | |
+| 13 — Piloto y portfolio | pendiente | | |
 
 ## Registro
 
@@ -58,3 +61,8 @@ Plantilla para cada entrada (copiar y completar):
   - Comprobación de tipos en Python con restricciones: `ge`/`le`/`gt`/`lt` para números, `min_length`/`max_length`/`pattern` para textos, `Decimal` para dinero (no `float`), `Annotated` para reusar un tipo con sus restricciones (`Monto`).
   - Mejorar las `description` para el LLM: van al JSON schema y el modelo las lee como instrucciones, así que tienen que decir el formato esperado (11 dígitos sin guiones, AAAA-MM-DD, 0 en facturas C).
 - **Dudas abiertas:**
+
+### 2026-10-13 — Migración de facturas-ai-lab a contratos-ia-lab
+- **Qué cambió:** el laboratorio pasa del dominio de facturas de ARCA a contratos de alquiler para inmobiliarias. Las entradas anteriores son del proyecto de facturas: los pasos 1 a 3 (uv, git, workspace) se reutilizan tal cual; el paso 4 (modelo `Comprobante`) quedó en `archive/facturas/models.py` como referencia, junto con el roadmap y las fuentes viejas.
+- **Fase 0 reordenada:** 4 = ruff y pytest, 5 = adaptar `core` a los modelos de alquileres, 6 = primeros tests.
+- **Nuevo:** `docs/validacion.md` (entrevistas con inmobiliarias) y la skill `/entrevista`.

@@ -1,7 +1,7 @@
 [project]
 name = "core"
 version = "0.1.0"
-description = "Modelos de datos compartidos del laboratorio (Comprobante, ítems)."
+description = "Modelos de datos compartidos: personas, propiedades, contratos, evidencia y documentos."
 readme = "README.md"
 authors = [
     { name = "Ignacio Lemmo", email = "ignacio.lemmo@gmail.com" }
