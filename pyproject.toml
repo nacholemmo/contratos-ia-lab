@@ -3,3 +3,28 @@
 
 [tool.uv.workspace]
 members = ["packages/*"]
+
+# --- ruff: lint y formato para todo el monorepo ---
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+# archive/ es referencia del dominio anterior: no se revisa.
+extend-exclude = ["archive"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "T20"]
+
+# --- pytest: un tests/ por paquete ---
+[tool.pytest.ini_options]
+testpaths = ["packages"]
+addopts = ["--strict-markers", "-m", "not slow and not network"]
+markers = [
+    "slow: tests lentos (por ejemplo, los que llaman a un LLM)",
+    "network: tests que necesitan internet",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.0",
+]

@@ -66,3 +66,8 @@ Plantilla para cada entrada (copiar y completar):
 - **Qué cambió:** el laboratorio pasa del dominio de facturas de ARCA a contratos de alquiler para inmobiliarias. Las entradas anteriores son del proyecto de facturas: los pasos 1 a 3 (uv, git, workspace) se reutilizan tal cual; el paso 4 (modelo `Comprobante`) quedó en `archive/facturas/models.py` como referencia, junto con el roadmap y las fuentes viejas.
 - **Fase 0 reordenada:** 4 = ruff y pytest, 5 = adaptar `core` a los modelos de alquileres, 6 = primeros tests.
 - **Nuevo:** `docs/validacion.md` (entrevistas con inmobiliarias) y la skill `/entrevista`.
+
+### 2026-10-13 — Fase 0, paso 4: ruff y pytest
+- **Qué construí:** ruff 0.17.0 y pytest 9.1.1 en `[dependency-groups] dev` del `pyproject.toml` raíz (`uv add --dev`). ruff: `target-version = "py312"`, `line-length = 100`, `archive/` excluido con `extend-exclude`, reglas `E, F, I, UP, B, SIM, C4, T20`. pytest: `testpaths = ["packages"]`, `--strict-markers` y los marcadores `slow` y `network` excluidos por defecto. Verificado: `ruff check .` sin errores, `ruff format --check .` con 14 archivos ya formateados y `pytest` cargando la configuración (todavía 0 tests, código 5).
+- **Qué aprendí:**
+- **Dudas abiertas:** ¿activar `DTZ` (fechas con zona horaria) cuando empiecen los cálculos de fechas?
