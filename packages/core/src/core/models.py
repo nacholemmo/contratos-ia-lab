@@ -5,6 +5,7 @@ sintético lo usa como ground truth, el extractor como salida estructurada del L
 y la base de datos guarda lo que estos modelos validan.
 """
 
+from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated
@@ -146,7 +147,47 @@ class Evidencia(BaseModel):
     pagina: int = Field(..., ge=1, description="Número de página donde aparece el fragmento")
 
 
+class Contrato(BaseModel):
+    """Contrato de locación. Cada dato clave lleva al lado su campo `<dato>_evidencia`."""
+
+    partes: list[Persona] = Field(
+        ..., min_length=2, description="Propietarios, inquilinos y garantes del contrato"
+    )
+    propiedad: Propiedad = Field(..., description="Inmueble alquilado")
+    fecha_inicio: date = Field(..., description="Fecha de inicio de la locación, AAAA-MM-DD")
+    plazo_meses: int = Field(..., ge=1, description="Duración total en meses (ej. 24, 36)")
+    monto_inicial: Monto = Field(..., description="Alquiler mensual del primer período")
+    moneda: Moneda = Field(..., description="Moneda del alquiler: ARS o USD")
+    indice: Indice = Field(..., description="Índice de ajuste; 'fijo' si no se ajusta")
+    frecuencia_ajuste_meses: int | None = Field(
+        None,
+        ge=1,
+        le=12,
+        description="Cada cuántos meses se ajusta (3, 4, 6 o 12); null si el índice es 'fijo'",
+    )
+    deposito: Monto | None = Field(
+        None, description="Depósito en garantía en la misma moneda; null si no hay"
+    )
+    regimen_legal: RegimenLegal = Field(..., description="Marco legal según la fecha de firma")
+    clausulas: list[Evidencia] = Field(
+        default_factory=list,
+        description="Cláusulas relevantes (rescisión, expensas), cada una con su texto y página",
+    )
+
+    # Evidencias (opción 1: campo gemelo por cada dato clave)
+
+    propiedad_evidencia: Evidencia | None = None
+    monto_inicial_evidencia: Evidencia | None = None
+    moneda_evidencia: Evidencia | None = None
+    indice_evidencia: Evidencia | None = None
+    frecuencia_ajuste_meses_evidencia: Evidencia | None = None
+    deposito_evidencia: Evidencia | None = None
+    fecha_inicio_evidencia: Evidencia | None = None
+    plazo_meses_evidencia: Evidencia | None = None
+
+
 __all__ = [
+    "Contrato",
     "Evidencia",
     "Indice",
     "Moneda",
