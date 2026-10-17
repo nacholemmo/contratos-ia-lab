@@ -7,7 +7,7 @@ Registro de cada paso o fase cerrada. Lo actualiza Claude al cerrar un paso y `/
 
 | Fase | Estado | Inicio | Cierre |
 |------|--------|--------|--------|
-| 0 — Setup del laboratorio | en curso (pasos 1–6 hechos) | 2026-10-12 | |
+| 0 — Setup del laboratorio | cerrada | 2026-10-12 | 2026-10-17 |
 | 1A — Generador de contratos sintéticos | pendiente | | |
 | 1B — Series de índices y normativa | pendiente | | |
 | 1C — Documentos complementarios sintéticos | pendiente | | |
@@ -85,3 +85,13 @@ Plantilla para cada entrada (copiar y completar):
 - **Qué construí:** `packages/core/tests/test_models.py` con 5 tests sobre datos sintéticos: contrato válido (con su evidencia), CUIT con dígito verificador inválido rechazado (con `match` para asegurar que lo rechaza el validador y no el `pattern`), monto como `Decimal` exacto, monto con 3 decimales rechazado y `id` distintos por `Persona`. En el pyproject raíz, `src = ["packages/*/src"]` para que ruff agrupe los imports de los paquetes propios como first-party. Verificado: `uv run pytest -v` → 5 passed; `ruff check` y `ruff format --check` sin errores; `uv sync --locked` en limpio.
 - **Qué aprendí:**
 - **Dudas abiertas:**
+
+### 2026-10-17 — Cierre de la Fase 0: setup del laboratorio
+- **Qué construí:** monorepo con workspace de uv (Python 3.12.8, un solo `uv.lock` y un `.venv/`), ruff y pytest como dependencias de desarrollo, paquete `core` con los modelos del dominio (`Persona`, `Propiedad`, `Evidencia`, `Contrato`, `Documento` y sus enums) y 5 tests. Verificado: `uv sync --locked` en limpio, `uv run pytest` → 5 passed, `ruff check` y `ruff format --check` sin errores.
+- **Qué aprendí:**
+  - `.python-version` y `requires-python` son los dos del proyecto: el primero es la versión exacta con la que desarrollo (uv arma el `.venv` con ella); el segundo es el rango que el paquete acepta, por eso `>=3.12` y no un patch fijo.
+  - El régimen legal no lo decide un LLM: es un dato derivado de la fecha de firma con una tabla fija, así que lo calcula código determinístico con tests. Por eso no lleva evidencia; solo lo extraído del papel la lleva. El LLM sirve donde hay que interpretar (clasificar documentos, extraer datos).
+  - `match` en `pytest.raises` asegura que el test falla por la razón correcta: sin él, un CUIT rechazado por el `pattern` daría verde aunque el validador del dígito estuviera roto (falso verde).
+- **Dudas abiertas:**
+  - `Contrato` tiene `fecha_inicio` pero no `fecha_firma`, y el régimen depende de la firma. ¿Agregar `fecha_firma` antes de la 1A?
+  - ¿Activar `DTZ` en ruff cuando empiecen los cálculos de fechas? (del paso 4)
