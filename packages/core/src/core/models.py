@@ -9,6 +9,7 @@ from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -78,6 +79,7 @@ def cuit_valido(cuit: str) -> bool:
 class Persona(BaseModel):
     """Persona física o jurídica que participa en un contrato."""
 
+    id: UUID = Field(default_factory=uuid4, description="ID interno; no lo genera el LLM")
     nombre: str = Field(
         ...,
         min_length=1,
@@ -140,8 +142,7 @@ class Evidencia(BaseModel):
         ...,
         min_length=1,
         description=(
-            "Fragmento copiado literal del documento, sin resumir, "
-            "que respalda el dato extraído"
+            "Fragmento copiado literal del documento, sin resumir, que respalda el dato extraído"
         ),
     )
     pagina: int = Field(..., ge=1, description="Número de página donde aparece el fragmento")
@@ -150,6 +151,7 @@ class Evidencia(BaseModel):
 class Contrato(BaseModel):
     """Contrato de locación. Cada dato clave lleva al lado su campo `<dato>_evidencia`."""
 
+    id: UUID = Field(default_factory=uuid4, description="ID interno; no lo genera el LLM")
     partes: list[Persona] = Field(
         ..., min_length=2, description="Propietarios, inquilinos y garantes del contrato"
     )
@@ -186,8 +188,38 @@ class Contrato(BaseModel):
     plazo_meses_evidencia: Evidencia | None = None
 
 
+class TipoDocumento(StrEnum):
+    """Tipo de archivo que entra al sistema; lo decide el clasificador de la Fase 3."""
+
+    CONTRATO = "contrato"
+    DNI = "dni"
+    RECIBO_SUELDO = "recibo_sueldo"
+    GARANTIA = "garantia"  # Garantía propietaria o seguro de caución.
+    SEGURO = "seguro"  # Seguro del inmueble (incendio, responsabilidad civil).
+    OTRO = "otro"
+
+
+class Documento(BaseModel):
+    """Archivo que entra al sistema y a qué persona o contrato está vinculado."""
+
+    id: UUID = Field(default_factory=uuid4, description="Identificador interno")
+    tipo: TipoDocumento = Field(..., description="Tipo de documento")
+
+    persona_id: UUID | None = Field(
+        None, description="ID de la persona a la que pertenece (si aplica)"
+    )
+    contrato_ids: list[UUID] = Field(
+        default_factory=list, description="IDs de contratos a los que pertenece (si aplica)"
+    )
+    referencia_archivo: str = Field(
+        min_length=1, description="Referencia al archivo original (path o URL)"
+    )
+    nombre_original: str = Field(min_length=1, description="Nombre original del archivo")
+
+
 __all__ = [
     "Contrato",
+    "Documento",
     "Evidencia",
     "Indice",
     "Moneda",
@@ -196,6 +228,7 @@ __all__ = [
     "Propiedad",
     "RegimenLegal",
     "Rol",
+    "TipoDocumento",
     "TipoPropiedad",
     "cuit_valido",
 ]
