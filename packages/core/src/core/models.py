@@ -156,6 +156,9 @@ class Contrato(BaseModel):
         ..., min_length=2, description="Propietarios, inquilinos y garantes del contrato"
     )
     propiedad: Propiedad = Field(..., description="Inmueble alquilado")
+    fecha_firma: date | None = Field(
+        None, description="Fecha de firma, AAAA-MM-DD; null si no figura o está en blanco"
+    )
     fecha_inicio: date = Field(..., description="Fecha de inicio de la locación, AAAA-MM-DD")
     plazo_meses: int = Field(..., ge=1, description="Duración total en meses (ej. 24, 36)")
     monto_inicial: Monto = Field(..., description="Alquiler mensual del primer período")
@@ -186,6 +189,7 @@ class Contrato(BaseModel):
     deposito_evidencia: Evidencia | None = None
     fecha_inicio_evidencia: Evidencia | None = None
     plazo_meses_evidencia: Evidencia | None = None
+    fecha_firma_evidencia: Evidencia | None = None
 
 
 class TipoDocumento(StrEnum):

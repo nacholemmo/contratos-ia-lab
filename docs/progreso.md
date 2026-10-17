@@ -93,5 +93,12 @@ Plantilla para cada entrada (copiar y completar):
   - El régimen legal no lo decide un LLM: es un dato derivado de la fecha de firma con una tabla fija, así que lo calcula código determinístico con tests. Por eso no lleva evidencia; solo lo extraído del papel la lleva. El LLM sirve donde hay que interpretar (clasificar documentos, extraer datos).
   - `match` en `pytest.raises` asegura que el test falla por la razón correcta: sin él, un CUIT rechazado por el `pattern` daría verde aunque el validador del dígito estuviera roto (falso verde).
 - **Dudas abiertas:**
-  - `Contrato` tiene `fecha_inicio` pero no `fecha_firma`, y el régimen depende de la firma. ¿Agregar `fecha_firma` antes de la 1A?
+  - ~~`Contrato` tiene `fecha_inicio` pero no `fecha_firma`~~ → resuelto el 2026-10-17 (ver abajo).
   - ¿Activar `DTZ` en ruff cuando empiecen los cálculos de fechas? (del paso 4)
+
+### 2026-10-17 — Ajuste previo a la 1A: fecha_firma en Contrato
+- **Qué construí:** `fecha_firma: date | None` en `Contrato`, con su gemelo `fecha_firma_evidencia`. Opcional porque el papel puede tenerla en blanco y el LLM no debe inventarla. Sin validador entre fechas: una firma posterior al inicio pasa en la vida real (alquiler de palabra que se formaliza después). Test nuevo: un contrato sin `fecha_firma` es válido. Verificado: `uv run pytest` → 6 passed.
+- **Qué aprendí:**
+- **Dudas abiertas:**
+  - Fase 4: la función que deduce el régimen, ¿qué hace si `fecha_firma` es null? (¿usar `fecha_inicio` y marcarlo para revisión?)
+  - Fase 7: la pantalla de revisión muestra tres estados por dato, deducidos de valor y evidencia: verde (valor + evidencia), verificar (valor sin evidencia) y completar a mano (null).

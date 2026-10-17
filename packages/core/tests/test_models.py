@@ -31,6 +31,7 @@ def datos_contrato() -> dict[str, Any]:
             "localidad": "Palermo",
             "provincia": "CABA",
         },
+        "fecha_firma": date(2025, 2, 15),
         "fecha_inicio": date(2025, 3, 1),
         "plazo_meses": 24,
         "monto_inicial": "450000.00",
@@ -54,6 +55,13 @@ def test_contrato_valido(datos_contrato: dict[str, Any]) -> None:
     )
     # Sin evidencia cargada, el gemelo queda en None (opcional por diseño).
     assert contrato.fecha_inicio_evidencia is None
+
+
+def test_contrato_sin_fecha_firma_es_valido(datos_contrato: dict[str, Any]) -> None:
+    # La fecha puede estar en blanco en el papel: el LLM deja null en vez de inventarla.
+    del datos_contrato["fecha_firma"]
+
+    assert Contrato(**datos_contrato).fecha_firma is None
 
 
 def test_cuit_con_digito_verificador_invalido_es_rechazado() -> None:
