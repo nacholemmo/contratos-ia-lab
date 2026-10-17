@@ -7,7 +7,7 @@ Registro de cada paso o fase cerrada. Lo actualiza Claude al cerrar un paso y `/
 
 | Fase | Estado | Inicio | Cierre |
 |------|--------|--------|--------|
-| 0 — Setup del laboratorio | en curso (pasos 1–5 hechos) | 2026-10-12 | |
+| 0 — Setup del laboratorio | en curso (pasos 1–6 hechos) | 2026-10-12 | |
 | 1A — Generador de contratos sintéticos | pendiente | | |
 | 1B — Series de índices y normativa | pendiente | | |
 | 1C — Documentos complementarios sintéticos | pendiente | | |
@@ -80,3 +80,8 @@ Plantilla para cada entrada (copiar y completar):
   - Fase 2: excluir los `id` del JSON schema de extracción para que el LLM no los invente.
   - Fase 2: con evidencias opcionales, el extractor tiene que exigir que todo dato no nulo tenga su evidencia.
   - Fase 7: ¿coordenadas en `Evidencia` para resaltar el fragmento en la pantalla de revisión?
+
+### 2026-10-17 — Fase 0, paso 6: primeros tests
+- **Qué construí:** `packages/core/tests/test_models.py` con 5 tests sobre datos sintéticos: contrato válido (con su evidencia), CUIT con dígito verificador inválido rechazado (con `match` para asegurar que lo rechaza el validador y no el `pattern`), monto como `Decimal` exacto, monto con 3 decimales rechazado y `id` distintos por `Persona`. En el pyproject raíz, `src = ["packages/*/src"]` para que ruff agrupe los imports de los paquetes propios como first-party. Verificado: `uv run pytest -v` → 5 passed; `ruff check` y `ruff format --check` sin errores; `uv sync --locked` en limpio.
+- **Qué aprendí:**
+- **Dudas abiertas:**
