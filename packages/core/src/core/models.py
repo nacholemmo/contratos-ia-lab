@@ -103,12 +103,58 @@ class Persona(BaseModel):
         return v
 
 
+class TipoPropiedad(StrEnum):
+    DEPARTAMENTO = "departamento"
+    CASA = "casa"
+    PH = "ph"  # Propiedad horizontal: casa dentro de un lote compartido.
+    LOCAL = "local"
+    OFICINA = "oficina"
+    OTRO = "otro"
+
+
+class Propiedad(BaseModel):
+    """Inmueble alquilado. Dirección separada en partes para poder buscar y deduplicar."""
+
+    tipo: TipoPropiedad = Field(..., description="Tipo de inmueble según el contrato")
+    calle: str = Field(..., min_length=1, description="Nombre de la calle, sin el número")
+    numero: str = Field(
+        ...,
+        min_length=1,
+        description="Altura de la calle; texto porque puede ser 'S/N' o '1234 bis'",
+    )
+    piso: str | None = Field(None, description="Piso (ej. '3', 'PB'); null si no aplica")
+    departamento: str | None = Field(
+        None, description="Unidad o departamento (ej. 'B', '12'); null si no aplica"
+    )
+    localidad: str = Field(..., min_length=1, description="Localidad o barrio (ej. 'Palermo')")
+    provincia: str = Field(..., min_length=1, description="Provincia (ej. 'Buenos Aires', 'CABA')")
+    codigo_postal: str | None = Field(
+        None,
+        description="Código postal tal como figura (ej. '1425' o 'C1425ABC'); null si no figura",
+    )
+
+
+class Evidencia(BaseModel):
+    texto: str = Field(
+        ...,
+        min_length=1,
+        description=(
+            "Fragmento copiado literal del documento, sin resumir, "
+            "que respalda el dato extraído"
+        ),
+    )
+    pagina: int = Field(..., ge=1, description="Número de página donde aparece el fragmento")
+
+
 __all__ = [
+    "Evidencia",
     "Indice",
     "Moneda",
     "Monto",
     "Persona",
+    "Propiedad",
     "RegimenLegal",
     "Rol",
+    "TipoPropiedad",
     "cuit_valido",
 ]
