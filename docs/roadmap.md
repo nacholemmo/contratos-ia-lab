@@ -12,7 +12,7 @@ Pasos:
 2. ✅ git init y .gitignore (data/, .env, .venv). Heredado de facturas-ai-lab.
 3. ✅ Workspace: pyproject.toml raíz con [tool.uv.workspace]. Heredado de facturas-ai-lab.
 4. ✅ ruff y pytest como dependencias de desarrollo, configurados en el pyproject raíz (excluir archive/).
-5. Adaptar el paquete core (el Comprobante de facturas quedó en archive/facturas/models.py como referencia) con los modelos pydantic: Persona (rol: propietario, inquilino, garante; DNI o CUIT con validación), Propiedad, Contrato (partes, propiedad, inicio, plazo, monto inicial, moneda, índice, frecuencia de ajuste, depósito, régimen legal, cláusulas), Evidencia (texto, página) y Documento (tipo, archivo, vínculos).
+5. ✅ Adaptar el paquete core (el Comprobante de facturas quedó en archive/facturas/models.py como referencia) con los modelos pydantic: Persona (rol: propietario, inquilino, garante; DNI o CUIT con validación), Propiedad, Contrato (partes, propiedad, inicio, plazo, monto inicial, moneda, índice, frecuencia de ajuste, depósito, régimen legal, cláusulas), Evidencia (texto, página) y Documento (tipo, archivo, vínculos).
 6. Primeros tests: un Contrato válido; CUIT con dígito verificador inválido rechazado; dinero como Decimal.
 Terminado cuando: uv sync funciona en limpio, uv run pytest pasa y ruff no reporta errores.
 

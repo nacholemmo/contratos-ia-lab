@@ -7,7 +7,7 @@ Registro de cada paso o fase cerrada. Lo actualiza Claude al cerrar un paso y `/
 
 | Fase | Estado | Inicio | Cierre |
 |------|--------|--------|--------|
-| 0 — Setup del laboratorio | en curso (pasos 1–3 hechos) | 2026-10-12 | |
+| 0 — Setup del laboratorio | en curso (pasos 1–5 hechos) | 2026-10-12 | |
 | 1A — Generador de contratos sintéticos | pendiente | | |
 | 1B — Series de índices y normativa | pendiente | | |
 | 1C — Documentos complementarios sintéticos | pendiente | | |
@@ -72,3 +72,11 @@ Plantilla para cada entrada (copiar y completar):
 - **Qué aprendí:** toda la configuración inicial con uv: instalar en el proyecto los paquetes necesarios y las herramientas de desarrollo para validar (pytest) y para lint y formato (ruff).
   - Con `uv add --dev`, ruff y pytest quedan en `[dependency-groups] dev` del pyproject raíz y no en las dependencias de `core`: son herramientas para desarrollar y no viajan con el paquete.
 - **Dudas abiertas:** ¿activar `DTZ` (fechas con zona horaria) cuando empiecen los cálculos de fechas?
+
+### 2026-10-17 — Fase 0, paso 5: modelos de alquileres en core
+- **Qué construí:** `models.py` de `core` con los modelos del dominio. Enums `Rol`, `Moneda`, `Indice`, `RegimenLegal`, `TipoPropiedad` y `TipoDocumento`. `Persona` con DNI o CUIT y validación del dígito verificador (`cuit_valido`, módulo 11). `Propiedad` con la dirección separada en partes. `Evidencia` (fragmento literal + página ≥ 1). `Contrato` con un campo gemelo `<dato>_evidencia` opcional por cada dato clave; `clausulas` es directamente `list[Evidencia]` y `regimen_legal` no lleva evidencia porque se deduce de la fecha. `Documento` con tipo, `referencia_archivo` (path o URL), `nombre_original` y vínculos opcionales `persona_id` y `contrato_ids`. `Persona` y `Contrato` tienen `id: UUID` con `default_factory=uuid4`. Verificado: ninguna línea pasa los 100 caracteres después de `ruff format`.
+- **Qué aprendí:**
+- **Dudas abiertas:**
+  - Fase 2: excluir los `id` del JSON schema de extracción para que el LLM no los invente.
+  - Fase 2: con evidencias opcionales, el extractor tiene que exigir que todo dato no nulo tenga su evidencia.
+  - Fase 7: ¿coordenadas en `Evidencia` para resaltar el fragmento en la pantalla de revisión?
