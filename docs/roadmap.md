@@ -1,10 +1,44 @@
 # Roadmap — contratos-ia-lab
 
-Regla: primero la IA, después el producto.
-Recursos: [Scrimba] = AI Engineer Path de Scrimba · [Path] = Path autodidacta: AI Engineer.
-Track paralelo desde la semana 1: entrevistas con inmobiliarias (/entrevista, docs/validacion.md).
+Alcance desde el 2026-10-18: este repo es el **servicio de IA sin estado** del módulo
+Alquileres de Avisa. Hace dos cosas: genera contratos sintéticos y extrae datos de
+documentos. Avisa es la única fuente de verdad: guarda inmobiliarias, contratos,
+personas y propiedades, hace la revisión humana, calcula aumentos y vencimientos y
+manda los avisos.
 
-## Fase 0 — Setup del laboratorio
+Recursos: [Scrimba] = AI Engineer Path de Scrimba · [Path] = Path autodidacta: AI Engineer.
+
+## Principios del servicio
+- **Sin estado:** no guarda documentos ni su contenido, tampoco en logs. Entra un
+  documento, sale una respuesta, y no queda nada.
+- **Datos sugeridos:** todo lo extraído es una sugerencia con evidencia (fragmento y
+  página). La confirmación la hace una persona en Avisa.
+- **Documentos no confiables:** el texto de un documento es dato, nunca instrucción
+  (prompt injection).
+- **Sintético y marcado:** el repo solo tiene datos sintéticos (Ley 25.326) y todo lo
+  generado viene marcado como sintético.
+- **Determinismo donde se puede:** el generador no usa LLM; con la misma semilla sale
+  el mismo contrato.
+
+## Fuera de este repo
+Base de datos, multi-tenant, usuarios y login, cálculo de aumentos y vencimientos,
+series de índices, avisos (email y WhatsApp) y pantalla de revisión: todo eso vive en
+Avisa. El agente de la ex Fase 6, si se hace, irá más adelante y consultará la API de
+Avisa. El fine-tuning también queda afuera por ahora.
+
+RAG: no hace falta para extraer, porque un contrato entra entero en el contexto.
+- Sobre normativa: candidato a servicio aparte (corpus público, índice de solo lectura).
+- Sobre contratos: dentro de Avisa o del agente, donde están los datos.
+
+## Paquetes
+- `packages/core` — modelos pydantic: esquemas de salida de la extracción y ground
+  truth del generador.
+- `packages/synthetic` — generador de contratos y documentos sintéticos.
+- `packages/extractor` — clasificación y extracción.
+- `packages/evals` — evaluaciones contra el generador.
+- `packages/api` — servicio HTTP.
+
+## Fase 0 — Setup del laboratorio ✅
 Objetivo: monorepo listo para trabajar.
 Conceptos: uv, workspaces, lockfiles, lint, tests.
 Pasos:
@@ -12,82 +46,108 @@ Pasos:
 2. ✅ git init y .gitignore (data/, .env, .venv). Heredado de facturas-ai-lab.
 3. ✅ Workspace: pyproject.toml raíz con [tool.uv.workspace]. Heredado de facturas-ai-lab.
 4. ✅ ruff y pytest como dependencias de desarrollo, configurados en el pyproject raíz (excluir archive/).
-5. ✅ Adaptar el paquete core (el Comprobante de facturas quedó en archive/facturas/models.py como referencia) con los modelos pydantic: Persona (rol: propietario, inquilino, garante; DNI o CUIT con validación), Propiedad, Contrato (partes, propiedad, inicio, plazo, monto inicial, moneda, índice, frecuencia de ajuste, depósito, régimen legal, cláusulas), Evidencia (texto, página) y Documento (tipo, archivo, vínculos).
+5. ✅ Modelos pydantic en core: Persona, Propiedad, Contrato, Evidencia y Documento.
 6. ✅ Primeros tests: un Contrato válido; CUIT con dígito verificador inválido rechazado; dinero como Decimal.
 Terminado cuando: uv sync funciona en limpio, uv run pytest pasa y ruff no reporta errores.
 
-## Fase 1 — Datos
-Recursos: [Path] semana 1 (fundamentos de LLMs). docs/fuentes.md.
-
-### 1A — Generador de contratos sintéticos (packages/contract-generator)
-Conceptos: datos sintéticos, ground truth, variación controlada.
+## Fase 1 — Generador sintético (packages/synthetic)
+Objetivo: `generate_contract(seed) -> (pdf, Contrato)` determinístico, con casos difíciles.
+Recursos: [Path] semana 1 (fundamentos de LLMs, para entender qué le va a costar al extractor).
+Conceptos: datos sintéticos, ground truth, semillas y reproducibilidad, variación controlada.
 Pasos:
-1. Datos falsos coherentes con Faker (es_AR): personas, DNI y CUIT válidos, direcciones, montos.
-2. Plantillas de contrato con Jinja2 para los tres regímenes y con variantes de redacción: índice (IPC, ICL, Casa Propia, UVA, dólares, monto fijo), frecuencia (3, 4, 6, 12 meses), depósito, cláusulas de rescisión y expensas. Que la misma información aparezca redactada de formas distintas.
-3. Render a PDF de varias páginas y a "foto" (imagen con ruido y rotación).
-4. Por cada contrato, su JSON con el modelo Contrato: es el ground truth.
-5. CLI: uv run --package contract-generator generate --n 50 --out data/synthetic/
-Terminado cuando: hay 50 contratos con su JSON, y un test verifica que cada JSON valida contra Contrato.
+1. Datos falsos coherentes con Faker (es_AR) y una semilla: personas con DNI y CUIT
+   válidos (el CUIT derivado del DNI), direcciones, fechas y montos coherentes entre sí.
+   Sale un `Contrato` que valida.
+2. Plantillas con Jinja2 y variantes de redacción: índice (IPC, ICL, Casa Propia, UVA,
+   dólares, monto fijo), frecuencia (3, 4, 6, 12 meses), depósito, rescisión y
+   expensas. La misma información, redactada de formas distintas. Montos en números,
+   en letras o en ambos.
+3. Render a PDF de varias páginas con la marca "SINTÉTICO" en cada página. El ground
+   truth incluye la evidencia real de cada campo (fragmento y página), porque el
+   generador sabe dónde puso cada dato.
+4. Casos difíciles, cada uno etiquetado: escaneo torcido (página como imagen con
+   rotación y ruido), montos solo en letras, cláusulas raras y datos faltantes (con el
+   campo en null en el ground truth).
+5. Documentos complementarios simples: DNI, recibo de sueldo, garantía y seguro. Sus
+   modelos pydantic se agregan a core.
+6. CLI: `uv run --package synthetic generate --n 50 --seed 42 --out data/synthetic/`,
+   que escribe cada PDF con su JSON de ground truth.
+Terminado cuando: hay 50 contratos y sus complementarios con su JSON; un test verifica
+que cada JSON valida contra su modelo y otro que la misma semilla produce el mismo
+contrato (mismos datos y mismo PDF).
 
-### 1B — Series de índices y normativa (packages/sources)
-Conceptos: ingesta de datos oficiales, caché, versionado de datos.
-Pasos:
-1. Descargar las series de IPC (INDEC) e ICL (BCRA) a data/series/ con caché local y fecha de descarga.
-2. Normalizar las series a un formato común (fecha, valor) con tests.
-3. Bajar el texto del capítulo de locación del Código Civil y Comercial y del DNU 70/2023 (InfoLEG y Boletín Oficial), con scraping responsable (robots.txt, pausas, caché).
-Terminado cuando: las series cargan desde caché sin red y hay tests de parseo con archivos guardados.
-
-### 1C — Documentos complementarios sintéticos
-DNI, recibos de sueldo y pólizas de seguro de caución sintéticos (simples), para el clasificador de la Fase 3.
-
-## Fase 2 — Extracción de contratos (packages/extractor)
-Objetivo: PDF o foto de contrato → Contrato con evidencia por campo.
+## Fase 2 — Clasificación de documentos (packages/extractor)
+Objetivo: documento → tipo (contrato, DNI, recibo de sueldo, garantía, seguro u otro).
 Recursos: [Scrimba] Intro to AI Engineering + Multimodality · [Path] semana 2.
-Conceptos: APIs de LLM, documentos largos, extracción de texto vs. visión, chunking, salidas estructuradas, validación y reintentos, tokens y costos.
+Conceptos: APIs de LLM, texto extraído vs. visión, tokens y costos, métricas de clasificación.
 Pasos:
-1. Llamada mínima a la API con el SDK oficial; registrar tokens, costo y latencia.
-2. Dos estrategias de entrada: texto extraído del PDF vs. imágenes de las páginas. Comparar calidad y costo en 5 contratos.
-3. Extracción estructurada al modelo Contrato, con evidencia (fragmento y página) por cada campo.
-4. Validación con pydantic y reintento pasando el error al modelo.
-5. Lote de 50 contratos sintéticos y precisión por campo contra el ground truth. Prestar especial atención a índice, frecuencia, fecha de inicio y monto.
-Terminado cuando: hay un reporte de precisión por campo y cada dato extraído tiene evidencia.
+1. Llamada mínima a la API con el SDK oficial; registrar tokens, costo y latencia (sin
+   registrar el contenido del documento).
+2. Entrada del documento: texto extraído del PDF vs. imágenes de las páginas. Comparar
+   calidad y costo, incluyendo los escaneos torcidos.
+3. Comparar 4 enfoques: reglas, LLM zero-shot, few-shot y embeddings + regresión logística.
+4. Métricas sobre el set sintético: accuracy, F1 por clase, matriz de confusión, costo y latencia.
+Terminado cuando: hay una tabla comparativa de los 4 enfoques y un clasificador elegido
+con su justificación.
 
-## Fase 3 — Clasificación de documentos y régimen — esbozo
-Tipo de documento (contrato, DNI, recibo de sueldo, garantía o caución, seguro, otro) y régimen legal del contrato. Comparar 4 enfoques: reglas, LLM zero-shot, few-shot, embeddings + regresión logística. Métricas: accuracy, F1 por clase, matriz de confusión, costo y latencia. El tipo decide qué extractor se usa (ruteo).
+## Fase 3 — Extracción por tipo de documento, con evidencia (packages/extractor)
+Objetivo: documento clasificado → campos de su modelo pydantic, evidencia por campo y advertencias.
+Conceptos: salidas estructuradas, validación y reintentos, documentos largos, ruteo por tipo, prompt injection.
+Pasos:
+1. Esquema de extracción derivado de los modelos de core, sin los campos internos (ids)
+   para que el LLM no los invente.
+2. Extracción estructurada de contratos con evidencia por campo; validación con
+   pydantic y reintento pasando el error al modelo.
+3. Verificación determinística de la evidencia: el fragmento tiene que aparecer en la
+   página indicada. Si no, el dato queda con una advertencia.
+4. Advertencias: dato sin evidencia, dato faltante, valores incoherentes (ej. depósito
+   en otra moneda que el alquiler).
+5. Extractores para DNI, recibo de sueldo, garantía y seguro, elegidos según el tipo de la Fase 2.
+6. Defensa contra prompt injection: el documento va como dato delimitado, nunca como
+   instrucción; casos sintéticos con instrucciones escondidas.
+Terminado cuando: `extract(documento)` devuelve tipo, campos, evidencia y advertencias
+para los 5 tipos, con tests sobre documentos sintéticos.
 
-## Fase 4 — Motor de ajustes y eventos (sin LLM) — esbozo
-Cálculo determinístico de aumentos según índice y frecuencia con las series oficiales; calendario de eventos (aumentos, vencimiento del contrato, vencimiento de seguros); tests de casos reales verificados a mano y tests de propiedades. Lección: la IA solo donde aporta.
+## Fase 4 — Evaluaciones contra el generador (packages/evals)
+Objetivo: saber cuán bien extrae el servicio, campo por campo, y detectar regresiones.
+Recursos: [Path] semana 5.
+Conceptos: ground truth, métricas por campo, comparación normalizada, evals de regresión.
+Pasos:
+1. Comparadores por tipo de campo: exacto (CUIT, fechas), numérico (montos como
+   Decimal), texto normalizado (nombres, direcciones).
+2. Precisión por campo y por tipo de documento, y desglose por caso difícil.
+3. Evaluación de la evidencia: ¿el fragmento y la página coinciden con los del generador?
+4. Robustez: tasa de éxito de los casos con prompt injection.
+5. Costo y latencia por documento; reporte en Markdown.
+6. Set chico de regresión que corre en CI.
+Terminado cuando: un comando genera el reporte de precisión por campo y por tipo, y el
+set de regresión corre en CI.
 
-## Fase 5 — RAG sobre contrato y normativa — esbozo
-[Scrimba] Embeddings and Vector Databases · [Path] semana 3.
-Postgres + pgvector; preguntas sobre el contrato ("¿quién paga las expensas extraordinarias?") y sobre el Código Civil, siempre con cita a la cláusula o al artículo. Búsqueda híbrida.
+## Fase 5 — API HTTP con token de servicio (packages/api)
+Objetivo: Avisa consume `/extract` y `/synthetic/contracts`.
+Recursos: [Scrimba] Deployment.
+Conceptos: diseño de API, contratos de respuesta, autenticación servicio a servicio, servicios sin estado.
+Pasos:
+1. Elegir el framework HTTP (comparar opciones y justificar).
+2. `POST /extract`: recibe PDF o imagen; devuelve tipo, campos, evidencia y
+   advertencias, marcados como sugeridos. Límites de tamaño y de tipo de archivo.
+3. `POST /synthetic/contracts`: semilla opcional; devuelve el PDF y sus datos correctos,
+   marcados como sintéticos.
+4. Token de servicio compartido con Avisa (comparación en tiempo constante, desde `.env`).
+5. Sin estado: el documento solo vive en memoria durante la request; logs sin
+   contenido (solo tipo, tamaño, tiempos y errores). Tests que lo verifican.
+6. Esquema OpenAPI versionado para que Avisa lo consuma.
+Terminado cuando: los tests de la API pasan (auth, extracción, semilla reproducible,
+logs sin contenido) y el OpenAPI está publicado en el repo.
 
-## Fase 6 — Agente y MCP — esbozo
-[Scrimba] Agents, Context Engineering, Model Context Protocol · [Path] semana 4.
-Herramientas: buscar contrato o persona, calcular ajuste (motor de la Fase 4), próximos eventos, redactar aviso. Servidor MCP sobre la base de contratos.
-
-## Fase 7 — App web, revisión humana y cartera — esbozo
-[Scrimba] Deployment.
-FastAPI y una interfaz simple: subir documentos, pantalla de revisión (dato extraído + evidencia + confirmar o corregir), fichas de propietarios, inquilinos, garantes y propiedades, multi-inmobiliaria (cada una ve solo lo suyo).
-
-## Fase 8 — Canales: bot de WhatsApp y avisos — esbozo
-Bot de WhatsApp (un número, solo administradores registrados): recibir documentos, responder con resumen y confirmar; resumen diario de avisos pendientes (plantilla de utilidad aprobada por Meta). Avisos a inquilinos: email automático y links wa.me con el mensaje prellenado (normalizar teléfonos a 549 + área + número). Registro de cada aviso.
-
-## Fase 9 — Evals y observabilidad — esbozo
-[Path] semana 5.
-Evals de extracción por campo, de clasificación y de RAG (LLM como juez + revisión humana), trazas con Langfuse, evals en CI. Usar las correcciones de los administradores (Fase 7) como nuevos casos de eval.
-
-## Fase 10 — Fine-tuning (opcional) — esbozo
-[Scrimba] Open-source Models · [Path] semana 6.
-Ajustar un modelo chico para el clasificador de la Fase 3 y sumarlo a su tabla comparativa.
-
-## Fase 11 — Inferencia y costos — esbozo
-[Path] semana 7.
-Costo por contrato procesado, caching, ruteo de modelos (barato para clasificar, potente para extraer), modelo propio vs. API.
-
-## Fase 12 — Seguridad y datos personales — esbozo
-[Path] semana 8.
-OWASP Top 10 para LLMs; contratos y PDFs sintéticos con prompt injection escondido; permisos por inmobiliaria y por usuario; cifrado; registro de accesos; cumplimiento de la Ley 25.326.
-
-## Fase 13 — Piloto y portfolio — esbozo
-Piloto con 1 o 2 inmobiliarias reales, README con arquitectura y decisiones, reporte de evals, video demo y post técnico.
+## Fase 6 — Deploy
+Objetivo: el servicio corre en un entorno al que solo llega el backend de Avisa.
+Conceptos: contenedores, secretos, red privada, healthchecks, observabilidad sin datos personales.
+Pasos:
+1. Imagen Docker reproducible a partir del workspace de uv.
+2. Secretos (token de servicio, API key del LLM) fuera de la imagen.
+3. Red privada: el servicio no queda expuesto al público.
+4. Healthcheck y métricas (latencia, errores, costo) sin contenido de documentos.
+5. Prueba de punta a punta desde un cliente que simula a Avisa.
+Terminado cuando: el servicio está desplegado, el healthcheck responde y una extracción
+de punta a punta funciona con un documento sintético.

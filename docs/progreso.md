@@ -8,21 +8,12 @@ Registro de cada paso o fase cerrada. Lo actualiza Claude al cerrar un paso y `/
 | Fase | Estado | Inicio | Cierre |
 |------|--------|--------|--------|
 | 0 — Setup del laboratorio | cerrada | 2026-10-12 | 2026-10-17 |
-| 1A — Generador de contratos sintéticos | pendiente | | |
-| 1B — Series de índices y normativa | pendiente | | |
-| 1C — Documentos complementarios sintéticos | pendiente | | |
-| 2 — Extracción de contratos | pendiente | | |
-| 3 — Clasificación de documentos y régimen | pendiente | | |
-| 4 — Motor de ajustes y eventos | pendiente | | |
-| 5 — RAG sobre contrato y normativa | pendiente | | |
-| 6 — Agente y MCP | pendiente | | |
-| 7 — App web, revisión humana y cartera | pendiente | | |
-| 8 — Bot de WhatsApp y avisos | pendiente | | |
-| 9 — Evals y observabilidad | pendiente | | |
-| 10 — Fine-tuning (opcional) | pendiente | | |
-| 11 — Inferencia y costos | pendiente | | |
-| 12 — Seguridad y datos personales | pendiente | | |
-| 13 — Piloto y portfolio | pendiente | | |
+| 1 — Generador sintético | en curso | 2026-10-18 | |
+| 2 — Clasificación de documentos | pendiente | | |
+| 3 — Extracción por tipo de documento, con evidencia | pendiente | | |
+| 4 — Evaluaciones contra el generador | pendiente | | |
+| 5 — API HTTP con token de servicio | pendiente | | |
+| 6 — Deploy | pendiente | | |
 
 ## Registro
 
@@ -102,3 +93,11 @@ Plantilla para cada entrada (copiar y completar):
 - **Dudas abiertas:**
   - Fase 4: la función que deduce el régimen, ¿qué hace si `fecha_firma` es null? (¿usar `fecha_inicio` y marcarlo para revisión?)
   - Fase 7: la pantalla de revisión muestra tres estados por dato, deducidos de valor y evidencia: verde (valor + evidencia), verificar (valor sin evidencia) y completar a mano (null).
+
+### 2026-10-18 — Cambio de alcance: servicio de IA sin estado para Avisa
+- **Qué cambió:** el repo pasa a ser el servicio de IA del módulo Alquileres de Avisa, sin estado, con dos funciones: generador de contratos sintéticos (`POST /synthetic/contracts`) y extracción de datos de documentos (`POST /extract`). Avisa es la única fuente de verdad: guarda los datos, hace la revisión humana, calcula aumentos y vencimientos y manda los avisos. Roadmap nuevo de 6 fases (generador, clasificación, extracción, evaluaciones, API, deploy); la Fase 0 se mantiene y los modelos de `core` quedan como esquemas de salida de la extracción y ground truth del generador. `CLAUDE.md` actualizado.
+- **Qué quedó afuera:** base de datos, multi-tenant, login, cálculo de aumentos, series de índices, avisos, agente y fine-tuning. RAG: no hace falta para extraer (un contrato entra entero en el contexto); el de normativa es candidato a servicio aparte y el de contratos iría dentro de Avisa o del agente, donde están los datos.
+- **Dudas abiertas:**
+  - Fase 3: ¿`regimen_legal` lo devuelve este servicio como dato derivado o lo calcula Avisa? (inclinación: Avisa).
+  - Fase 3: `Documento` tiene `referencia_archivo` y vínculos (`persona_id`, `contrato_ids`), que son conceptos con estado; revisar si sobran.
+  - Las dudas anotadas para la ex Fase 7 (coordenadas en `Evidencia`, tres estados por dato en la revisión) pasan a ser temas de Avisa; las coordenadas podrían volver si Avisa resalta el fragmento.
