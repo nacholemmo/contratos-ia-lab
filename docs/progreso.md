@@ -101,3 +101,12 @@ Plantilla para cada entrada (copiar y completar):
   - Fase 3: ¿`regimen_legal` lo devuelve este servicio como dato derivado o lo calcula Avisa? (inclinación: Avisa).
   - Fase 3: `Documento` tiene `referencia_archivo` y vínculos (`persona_id`, `contrato_ids`), que son conceptos con estado; revisar si sobran.
   - Las dudas anotadas para la ex Fase 7 (coordenadas en `Evidencia`, tres estados por dato en la revisión) pasan a ser temas de Avisa; las coordenadas podrían volver si Avisa resalta el fragmento.
+
+### 2026-10-18 — Fase 1, paso 1: datos falsos coherentes con semilla
+- **Qué construí:** paquete `packages/synthetic` (Faker 40.43, depende de `core` como miembro del workspace). `Source(seed)` agrupa `random.Random` y `Faker("es_AR")` con la misma semilla y genera UUID reproducibles. `identity.py`: `generate_dni` y `cuit_from_dni` (prefijo 20/27, y 23 cuando el dígito verificador daría 10, recalculado con el mismo helper `_digito_verificador`). `contracts.py`: `generate_persona`, `generate_propiedad` (tabla de localidades coherente), `regimen_por_fecha` (bordes 17/10/2023 y 29/12/2023), `choose_terms` (leyes viejas fijas; DNU con decisiones en cadena moneda → índice → frecuencia, y pesos representativos en constantes `PESOS_*_DNU`) y `generate_contrato(seed)`. Verificado: `uv run pytest` → 37 passed; `ruff check` y `ruff format --check` sin errores.
+- **Qué aprendí:**
+- **Dudas abiertas:**
+  - Faker `es_AR` (40.43): `name_male()` falla y `city()`/`province()` no son coherentes entre sí; por eso nombres por partes y tabla propia de localidades.
+  - El determinismo depende también de la versión de Faker fijada en `uv.lock`: actualizar Faker puede cambiar los contratos de cada semilla.
+  - Fase 4: los pesos `PESOS_*_DNU` son aproximados; ajustarlos con datos reales (docs/validacion.md). Reportar por separado el set representativo y el de casos difíciles.
+  - `identity.py`: sobra el `# noqa: F401` del import de `PESOS_CUIT`; `PREFIJO_POR_SEXO` podría tiparse `dict[Sexo, str]`.

@@ -55,7 +55,7 @@ Objetivo: `generate_contract(seed) -> (pdf, Contrato)` determinístico, con caso
 Recursos: [Path] semana 1 (fundamentos de LLMs, para entender qué le va a costar al extractor).
 Conceptos: datos sintéticos, ground truth, semillas y reproducibilidad, variación controlada.
 Pasos:
-1. Datos falsos coherentes con Faker (es_AR) y una semilla: personas con DNI y CUIT
+1. ✅ Datos falsos coherentes con Faker (es_AR) y una semilla: personas con DNI y CUIT
    válidos (el CUIT derivado del DNI), direcciones, fechas y montos coherentes entre sí.
    Sale un `Contrato` que valida.
 2. Plantillas con Jinja2 y variantes de redacción: índice (IPC, ICL, Casa Propia, UVA,
