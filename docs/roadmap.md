@@ -70,7 +70,7 @@ Pasos:
 1. ✅ Datos falsos coherentes con Faker (es_AR) y una semilla: personas con DNI y CUIT
    válidos (el CUIT derivado del DNI), direcciones, fechas y montos coherentes entre sí.
    Sale un `Contrato` que valida.
-2. Plantillas con Jinja2 y variantes de redacción: índice (IPC, ICL, Casa Propia, UVA,
+2. ✅ Plantillas con Jinja2 y variantes de redacción: índice (IPC, ICL, Casa Propia, UVA,
    dólares, monto fijo), frecuencia (3, 4, 6, 12 meses), depósito, rescisión y
    expensas. La misma información, redactada de formas distintas. Montos en números,
    en letras o en ambos.

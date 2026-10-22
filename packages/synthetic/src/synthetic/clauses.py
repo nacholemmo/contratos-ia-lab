@@ -1,0 +1,200 @@
+"""Cláusulas del contrato renderizadas con Jinja2, con los fragmentos que respaldan cada dato.
+
+Cada cláusula se renderiza por separado y guarda en `fragmentos` el texto literal de
+cada dato del `Contrato` que contiene. En el paso 3, al armar el PDF, se le suma la
+página y eso es la evidencia del ground truth.
+"""
+
+from dataclasses import dataclass, field
+
+from jinja2 import Environment, StrictUndefined
+
+from core.models import Contrato, Persona, Rol
+from synthetic.amounts import EstiloMonto, format_monto
+from synthetic.source import Source
+from synthetic.wording import (
+    frase_ajuste,
+    frase_documento,
+    frase_fecha,
+    frase_plazo,
+    frase_propiedad,
+)
+
+# StrictUndefined: una variable mal escrita en una plantilla falla en vez de quedar vacía.
+# Sin autoescape: el resultado es texto plano, no HTML.
+ENV = Environment(undefined=StrictUndefined, autoescape=False)
+
+ORDINALES = (
+    "PRIMERA",
+    "SEGUNDA",
+    "TERCERA",
+    "CUARTA",
+    "QUINTA",
+    "SEXTA",
+    "SÉPTIMA",
+    "OCTAVA",
+    "NOVENA",
+    "DÉCIMA",
+    "UNDÉCIMA",
+    "DUODÉCIMA",
+)
+
+# Variantes por cláusula. Las variables son los fragmentos ya redactados en wording.py.
+PLANTILLAS: dict[str, tuple[str, ...]] = {
+    "encabezado": (
+        "En {{ localidad }}, el {{ fecha_firma }}, entre {{ locadores }}, en adelante "
+        "LA PARTE LOCADORA, por una parte, y {{ locatarios }}, en adelante LA PARTE "
+        "LOCATARIA, por la otra, convienen celebrar el presente contrato de locación, "
+        "sujeto a las siguientes cláusulas:",
+        "CONTRATO DE LOCACIÓN. Entre {{ locadores }} (LOCADOR/A) y {{ locatarios }} "
+        "(LOCATARIO/A), se celebra el presente contrato el {{ fecha_firma }} en "
+        "{{ localidad }}, que se regirá por las cláusulas que siguen.",
+    ),
+    "objeto": (
+        "LA PARTE LOCADORA da en locación a LA PARTE LOCATARIA {{ propiedad }}, "
+        "con destino exclusivo de vivienda.",
+        "El objeto del presente es {{ propiedad }}, que LA PARTE LOCATARIA recibe en "
+        "buen estado de conservación y destinará a vivienda familiar.",
+    ),
+    "plazo": (
+        "El plazo de la locación se pacta en {{ plazo }}, a partir del {{ fecha_inicio }}.",
+        "La locación tendrá vigencia desde el {{ fecha_inicio }} y por el término de "
+        "{{ plazo }}, venciendo de pleno derecho sin necesidad de interpelación alguna.",
+    ),
+    "precio": (
+        "El precio de la locación se fija en la suma de {{ monto }} mensuales, pagaderos "
+        "por adelantado del 1 al 10 de cada mes.",
+        "LA PARTE LOCATARIA abonará un alquiler mensual de {{ monto }}, por mes adelantado, "
+        "dentro de los primeros diez días de cada período.",
+    ),
+    "ajuste": (
+        "El precio {{ ajuste }}.",
+        "Las partes acuerdan que el canon locativo {{ ajuste }}.",
+    ),
+    "deposito": (
+        "En garantía del cumplimiento de sus obligaciones, LA PARTE LOCATARIA entrega en "
+        "este acto la suma de {{ deposito }}, que le será restituida al finalizar la locación.",
+        "Se deja constancia de que LA PARTE LOCATARIA entrega en concepto de depósito en "
+        "garantía {{ deposito }}, sirviendo el presente de suficiente recibo.",
+    ),
+    "garantia": (
+        "{{ garantes }} se constituye{{ 'n' if plural }} en fiador{{ 'es' if plural }} "
+        "solidario{{ 's' if plural }}, liso{{ 's' if plural }} y llano{{ 's' if plural }} "
+        "pagador{{ 'es' if plural }} de todas las obligaciones de LA PARTE LOCATARIA.",
+    ),
+    "expensas": (
+        "Las expensas ordinarias estarán a cargo de LA PARTE LOCATARIA; las extraordinarias, "
+        "a cargo de LA PARTE LOCADORA.",
+        "Serán a cargo de LA PARTE LOCATARIA los servicios de luz, gas, agua y las expensas "
+        "comunes ordinarias. Las expensas extraordinarias corresponden a LA PARTE LOCADORA.",
+    ),
+    "rescision": (
+        "LA PARTE LOCATARIA podrá rescindir el contrato transcurridos seis meses, "
+        "notificando en forma fehaciente con un mes de anticipación.",
+        "Cumplidos los primeros seis (6) meses, LA PARTE LOCATARIA podrá resolver "
+        "anticipadamente la locación, abonando la indemnización que corresponda según ley.",
+    ),
+}
+
+TITULOS = {
+    "objeto": "OBJETO",
+    "plazo": "PLAZO",
+    "precio": "PRECIO",
+    "ajuste": "ACTUALIZACIÓN",
+    "deposito": "DEPÓSITO EN GARANTÍA",
+    "garantia": "GARANTÍA",
+    "expensas": "EXPENSAS Y SERVICIOS",
+    "rescision": "RESCISIÓN",
+}
+
+
+@dataclass(frozen=True)
+class Clause:
+    """Una cláusula renderizada. `fragmentos` mapea campo del Contrato → texto literal."""
+
+    nombre: str
+    titulo: str | None
+    texto: str
+    fragmentos: dict[str, str] = field(default_factory=dict)
+
+
+def _personas(source: Source, personas: list[Persona]) -> str:
+    return " y ".join(f"{p.nombre}, {frase_documento(source, p.dni, p.cuit)}" for p in personas)
+
+
+def _render(source: Source, nombre: str, **variables: object) -> str:
+    plantilla = source.rng.choice(PLANTILLAS[nombre])
+    return ENV.from_string(plantilla).render(**variables)
+
+
+def _estilo_monto(source: Source) -> EstiloMonto:
+    return source.rng.choices(list(EstiloMonto), weights=[0.3, 0.2, 0.5])[0]
+
+
+def render_clauses(contrato: Contrato, source: Source) -> list[Clause]:
+    """Cláusulas del contrato en orden, con variantes elegidas por `source`."""
+    c = contrato
+    por_rol = {rol: [p for p in c.partes if p.rol == rol] for rol in Rol}
+    numerar = source.rng.choice(
+        (lambda i, t: f"{ORDINALES[i]}: {t}", lambda i, t: f"CLÁUSULA {i + 1} - {t}")
+    )
+
+    fecha_firma = frase_fecha(source, c.fecha_firma) if c.fecha_firma else None
+    encabezado = _render(
+        source,
+        "encabezado",
+        localidad=c.propiedad.localidad,
+        fecha_firma=fecha_firma or "____ de __________ de 20__",
+        locadores=_personas(source, por_rol[Rol.PROPIETARIO]),
+        locatarios=_personas(source, por_rol[Rol.INQUILINO]),
+    )
+    clauses = [
+        Clause(
+            "encabezado",
+            None,
+            encabezado,
+            {"fecha_firma": fecha_firma} if fecha_firma else {},
+        )
+    ]
+
+    # (nombre, variables para la plantilla, fragmentos que respaldan campos del Contrato)
+    cuerpo: list[tuple[str, dict[str, object], dict[str, str]]] = []
+
+    propiedad = frase_propiedad(source, c.propiedad)
+    cuerpo.append(("objeto", {"propiedad": propiedad}, {"propiedad": propiedad}))
+
+    plazo = frase_plazo(source, c.plazo_meses)
+    inicio = frase_fecha(source, c.fecha_inicio)
+    cuerpo.append(
+        (
+            "plazo",
+            {"plazo": plazo, "fecha_inicio": inicio},
+            {"plazo_meses": plazo, "fecha_inicio": inicio},
+        )
+    )
+
+    monto = format_monto(c.monto_inicial, c.moneda, _estilo_monto(source))
+    cuerpo.append(("precio", {"monto": monto}, {"monto_inicial": monto, "moneda": monto}))
+
+    ajuste = frase_ajuste(source, c.indice, c.frecuencia_ajuste_meses)
+    fragmentos_ajuste = {"indice": ajuste}
+    if c.frecuencia_ajuste_meses is not None:
+        fragmentos_ajuste["frecuencia_ajuste_meses"] = ajuste
+    cuerpo.append(("ajuste", {"ajuste": ajuste}, fragmentos_ajuste))
+
+    if c.deposito is not None:
+        deposito = format_monto(c.deposito, c.moneda, _estilo_monto(source))
+        cuerpo.append(("deposito", {"deposito": deposito}, {"deposito": deposito}))
+
+    garantes = por_rol[Rol.GARANTE]
+    if garantes:
+        variables = {"garantes": _personas(source, garantes), "plural": len(garantes) > 1}
+        cuerpo.append(("garantia", variables, {}))
+
+    cuerpo.append(("expensas", {}, {}))
+    cuerpo.append(("rescision", {}, {}))
+
+    for i, (nombre, variables, fragmentos) in enumerate(cuerpo):
+        texto = _render(source, nombre, **variables)
+        clauses.append(Clause(nombre, numerar(i, TITULOS[nombre]), texto, fragmentos))
+    return clauses
