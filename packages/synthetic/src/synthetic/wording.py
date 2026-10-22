@@ -84,6 +84,23 @@ def frase_fecha(source: Source, d: date) -> str:
     return source.rng.choice(variantes)
 
 
+def dia_en_letras(dia: int) -> str:
+    """Día delante de 'días': 'veinte', 'veintiún', 'treinta y un' (apócope, como en montos)."""
+    letras = num2words(dia, lang="es")
+    if letras == "veintiuno":
+        return "veintiún"
+    return letras.removesuffix("uno") + "un" if letras.endswith("uno") else letras
+
+
+def frase_fecha_cierre(source: Source, d: date) -> str:
+    """Fecha como se escribe al cierre: 'a los veinte días del mes de marzo de 2025'."""
+    mes = f"del mes de {MESES[d.month - 1]} de {d.year}"
+    if d.day == 1:
+        return f"al primer día {mes}"
+    dia = source.rng.choice((dia_en_letras(d.day), str(d.day)))
+    return f"a los {dia} días {mes}"
+
+
 def frase_plazo(source: Source, meses: int) -> str:
     variantes = [f"{numero_con_letras(meses)} meses", f"{meses} meses"]
     if meses % 12 == 0:
@@ -135,3 +152,29 @@ def frase_documento(source: Source, dni: str | None, cuit: str | None) -> str:
         con_guiones = f"{cuit[:2]}-{cuit[2:10]}-{cuit[10]}"
         partes.append(f"CUIT/CUIL {source.rng.choice((cuit, con_guiones))}")
     return ", ".join(partes)
+
+
+def frase_tribunales(localidad: str, provincia: str) -> str:
+    """Tribunales competentes según dónde está el inmueble.
+
+    'CABA' → 'los Juzgados Nacionales de Primera Instancia en lo Civil de la Ciudad Autónoma
+    de Buenos Aires' · ('San Rafael', 'Mendoza') → 'los Tribunales Ordinarios de la Segunda
+    Circunscripción Judicial de Mendoza'
+    """
+    if provincia == "CABA":
+        return (
+            "los Juzgados Nacionales de Primera Instancia en lo Civil "
+            "de la Ciudad Autónoma de Buenos Aires"
+        )
+    if provincia == "Mendoza":
+        circunscripcion = "Segunda" if localidad == "San Rafael" else "Primera"
+        return (
+            f"los Tribunales Ordinarios de la {circunscripcion} Circunscripción Judicial de Mendoza"
+        )
+    if provincia == "Buenos Aires":
+        return f"los Tribunales Ordinarios del Departamento Judicial de {localidad}"
+    if provincia == "Córdoba":
+        return "los Tribunales Ordinarios de la Primera Circunscripción Judicial de Córdoba"
+    if provincia == "Santa Fe":
+        return "los Tribunales Ordinarios de la Segunda Circunscripción Judicial de Santa Fe"
+    raise ValueError(f"Sin tribunales para {localidad}, {provincia}")

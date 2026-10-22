@@ -84,15 +84,9 @@ def _write_clause(pdf: FPDF, clause: Clause) -> int:
 
 
 def _write_firmas(pdf: FPDF) -> None:
+    # La frase de cierre ("En prueba de conformidad…") es la última cláusula, con su fecha.
     pdf.set_font("Helvetica", "", TAMANIO_LETRA)
-    pdf.multi_cell(
-        0,
-        ALTO_LINEA,
-        "En prueba de conformidad, se firman dos ejemplares de un mismo tenor y a un solo efecto.",
-        new_x=XPos.LMARGIN,
-        new_y=YPos.NEXT,
-    )
-    pdf.ln(18)
+    pdf.ln(15)
     pdf.cell(85, ALTO_LINEA, "______________________", align="C")
     pdf.cell(85, ALTO_LINEA, "______________________", align="C", new_x=XPos.LMARGIN)
     pdf.ln(ALTO_LINEA)

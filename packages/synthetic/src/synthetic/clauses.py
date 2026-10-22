@@ -16,13 +16,19 @@ from synthetic.wording import (
     frase_ajuste,
     frase_documento,
     frase_fecha,
+    frase_fecha_cierre,
     frase_plazo,
     frase_propiedad,
+    frase_tribunales,
 )
 
 # StrictUndefined: una variable mal escrita en una plantilla falla en vez de quedar vacía.
 # Sin autoescape: el resultado es texto plano, no HTML.
 ENV = Environment(undefined=StrictUndefined, autoescape=False)
+
+# Probabilidad de que la fecha de firma vaya al cierre y no al encabezado (estilo del
+# modelo de Mendoza: "a los … días del mes de …").
+P_FECHA_EN_CIERRE = 0.4
 
 ORDINALES = (
     "PRIMERA",
@@ -49,6 +55,27 @@ PLANTILLAS: dict[str, tuple[str, ...]] = {
         "CONTRATO DE LOCACIÓN. Entre {{ locadores }} (LOCADOR/A) y {{ locatarios }} "
         "(LOCATARIO/A), se celebra el presente contrato el {{ fecha_firma }} en "
         "{{ localidad }}, que se regirá por las cláusulas que siguen.",
+    ),
+    # Si la fecha de firma va al cierre ("a los … días del mes de …"), el encabezado no la lleva.
+    "encabezado_sin_fecha": (
+        "En {{ localidad }}, entre {{ locadores }}, en adelante LA PARTE LOCADORA, por una "
+        "parte, y {{ locatarios }}, en adelante LA PARTE LOCATARIA, por la otra, convienen "
+        "celebrar el presente contrato de locación, sujeto a las siguientes cláusulas:",
+        "Entre {{ locadores }}, en adelante EL LOCADOR, y {{ locatarios }}, en adelante EL "
+        "LOCATARIO, se conviene celebrar el presente contrato de locación, que se regirá por "
+        "las cláusulas siguientes:",
+    ),
+    "cierre": (
+        "En prueba de conformidad, se firman dos (2) ejemplares de un mismo tenor y a un solo "
+        "efecto, en {{ localidad }}, {{ fecha_firma }}.",
+        "Leído y ratificado, las partes firman dos (2) ejemplares de un mismo tenor en "
+        "{{ localidad }}, {{ fecha_firma }}.",
+    ),
+    "cierre_sin_fecha": (
+        "En prueba de conformidad, se firman dos (2) ejemplares de un mismo tenor y a un solo "
+        "efecto.",
+        "Leído y ratificado, las partes firman dos (2) ejemplares de un mismo tenor y a un "
+        "solo efecto.",
     ),
     "objeto": (
         "LA PARTE LOCADORA da en locación a LA PARTE LOCATARIA {{ propiedad }}, "
@@ -104,11 +131,10 @@ PLANTILLAS: dict[str, tuple[str, ...]] = {
     ),
     "jurisdiccion": (
         "Para todos los efectos legales, las partes constituyen domicilio en los indicados en "
-        "el encabezado y se someten a la jurisdicción de los tribunales ordinarios del lugar "
-        "del inmueble, renunciando a cualquier otro fuero.",
+        "el encabezado y se someten a la jurisdicción de {{ tribunales }}, renunciando a "
+        "cualquier otro fuero.",
         "Las partes fijan domicilios especiales en los denunciados en el presente, donde serán "
-        "válidas todas las notificaciones, y se someten a los tribunales ordinarios "
-        "competentes según la ubicación del inmueble.",
+        "válidas todas las notificaciones, y se someten a {{ tribunales }}.",
     ),
 }
 
@@ -183,15 +209,25 @@ def render_clauses(contrato: Contrato, source: Source) -> list[Clause]:
     c = contrato
     por_rol = {rol: [p for p in c.partes if p.rol == rol] for rol in Rol}
     numerar = source.rng.choice(
-        (lambda i, t: f"{ORDINALES[i]}: {t}", lambda i, t: f"CLÁUSULA {i + 1} - {t}")
+        (
+            lambda i, t: f"{ORDINALES[i]}: {t}",
+            lambda i, t: f"CLÁUSULA {i + 1} - {t}",
+            lambda i, t: f"ARTÍCULO {i + 1}: {t}",
+        )
     )
 
-    fecha_firma = frase_fecha(source, c.fecha_firma) if c.fecha_firma else None
+    # La fecha de firma va en el encabezado o en el cierre, nunca en los dos.
+    fecha_encabezado = fecha_cierre = None
+    if c.fecha_firma is not None:
+        if source.rng.random() < P_FECHA_EN_CIERRE:
+            fecha_cierre = frase_fecha_cierre(source, c.fecha_firma)
+        else:
+            fecha_encabezado = frase_fecha(source, c.fecha_firma)
     encabezado = _render(
         source,
-        PLANTILLAS["encabezado"],
+        PLANTILLAS["encabezado_sin_fecha" if fecha_cierre else "encabezado"],
         localidad=c.propiedad.localidad,
-        fecha_firma=fecha_firma or "____ de __________ de 20__",
+        fecha_firma=fecha_encabezado or "____ de __________ de 20__",
         locadores=_personas(source, por_rol[Rol.PROPIETARIO]),
         locatarios=_personas(source, por_rol[Rol.INQUILINO]),
     )
@@ -200,7 +236,7 @@ def render_clauses(contrato: Contrato, source: Source) -> list[Clause]:
             "encabezado",
             None,
             encabezado,
-            {"fecha_firma": fecha_firma} if fecha_firma else {},
+            {"fecha_firma": fecha_encabezado} if fecha_encabezado else {},
         )
     ]
 
@@ -242,14 +278,24 @@ def render_clauses(contrato: Contrato, source: Source) -> list[Clause]:
     cuerpo.append(("conservacion", {}, {}))
     cuerpo.append(("prohibiciones", {}, {}))
     cuerpo.append(("rescision", {}, {}))
-    cuerpo.append(("jurisdiccion", {}, {}))
+    tribunales = frase_tribunales(c.propiedad.localidad, c.propiedad.provincia)
+    cuerpo.append(("jurisdiccion", {"tribunales": tribunales}, {}))
 
-    # Cláusulas cuyo contenido depende del contrato (no solo la forma). En el resto del ajuste
-    # se suma la jurisdicción por provincia.
+    # Cláusulas cuyo texto legal depende del contrato (no solo la forma).
     por_contrato = {"rescision": PLANTILLAS_RESCISION[c.regimen_legal]}
 
     for i, (nombre, variables, fragmentos) in enumerate(cuerpo):
         plantillas = por_contrato[nombre] if nombre in por_contrato else PLANTILLAS[nombre]
         texto = _render(source, plantillas, **variables)
         clauses.append(Clause(nombre, numerar(i, TITULOS[nombre]), texto, fragmentos))
+
+    cierre = _render(
+        source,
+        PLANTILLAS["cierre" if fecha_cierre else "cierre_sin_fecha"],
+        localidad=c.propiedad.localidad,
+        fecha_firma=fecha_cierre,
+    )
+    clauses.append(
+        Clause("cierre", None, cierre, {"fecha_firma": fecha_cierre} if fecha_cierre else {})
+    )
     return clauses

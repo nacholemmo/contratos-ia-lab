@@ -98,6 +98,24 @@ def test_rescision_se_genera_para_los_tres_regimenes():
     assert regimenes == set(RegimenLegal)
 
 
+@pytest.mark.parametrize("seed", SEEDS)
+def test_fecha_firma_en_encabezado_o_en_cierre(seed):
+    _, clauses = _render(seed)
+    assert clauses[-1].nombre == "cierre"
+    con_fecha = [c.nombre for c in clauses if "fecha_firma" in c.fragmentos]
+    assert con_fecha in (["encabezado"], ["cierre"])
+
+
+def test_hay_fechas_en_los_dos_lugares_y_las_tres_numeraciones():
+    lugares, numeraciones = set(), set()
+    for seed in SEEDS:
+        clauses = _render(seed)[1]
+        lugares |= {c.nombre for c in clauses if "fecha_firma" in c.fragmentos}
+        numeraciones.add(clauses[1].titulo.split()[0])
+    assert lugares == {"encabezado", "cierre"}
+    assert {"PRIMERA:", "CLÁUSULA", "ARTÍCULO"} <= numeraciones
+
+
 def test_redaccion_no_cambia_los_datos():
     # Renderizar no consume la Source de los datos: el contrato es el mismo con o sin render.
     for seed in range(20):
