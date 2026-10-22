@@ -8,6 +8,7 @@ from synthetic.contracts import (
     FIRMA_DESDE,
     FIRMA_HASTA,
     LOCALIDADES,
+    PESOS_PROVINCIA,
     choose_terms,
     generate_contrato,
     generate_persona,
@@ -51,6 +52,21 @@ def test_propiedad_coherente():
         es_depto = prop.tipo == TipoPropiedad.DEPARTAMENTO
         assert (prop.piso is not None) == es_depto
         assert (prop.departamento is not None) == es_depto
+
+
+def test_pesos_provincia_cubren_la_tabla():
+    # Una provincia sin peso nunca saldría; una con peso y sin localidades rompería la elección.
+    assert set(PESOS_PROVINCIA) == {provincia for _, provincia, _ in LOCALIDADES}
+    assert sum(PESOS_PROVINCIA.values()) == pytest.approx(1)
+
+
+def test_mayoria_mendoza_y_resto_variado():
+    props = [generate_propiedad(Source(seed)) for seed in range(2000)]
+    por_provincia = Counter(p.provincia for p in props)
+    assert 0.65 < por_provincia["Mendoza"] / len(props) < 0.75
+    assert set(por_provincia) == set(PESOS_PROVINCIA)
+    # Todas las localidades de la tabla salen alguna vez (no solo la capital de cada provincia).
+    assert {p.localidad for p in props} == {loc for loc, _, _ in LOCALIDADES}
 
 
 def test_misma_semilla_misma_propiedad():

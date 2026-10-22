@@ -32,7 +32,23 @@ LOCALIDADES: tuple[tuple[str, str, str], ...] = (
     ("Córdoba", "Córdoba", "5000"),
     ("Rosario", "Santa Fe", "2000"),
     ("Mendoza", "Mendoza", "5500"),
+    ("Godoy Cruz", "Mendoza", "5501"),
+    ("Guaymallén", "Mendoza", "5521"),
+    ("Las Heras", "Mendoza", "5539"),
+    ("Luján de Cuyo", "Mendoza", "5507"),
+    ("Maipú", "Mendoza", "5515"),
+    ("San Rafael", "Mendoza", "5600"),
 )
+
+# Mayoría Mendoza (mercado de Avisa); el resto, variado para que el extractor no se
+# acostumbre a un solo formato de dirección. Aproximado; ajustar con datos reales.
+PESOS_PROVINCIA: dict[str, float] = {
+    "Mendoza": 0.70,
+    "CABA": 0.12,
+    "Buenos Aires": 0.10,
+    "Córdoba": 0.04,
+    "Santa Fe": 0.04,
+}
 
 # Probabilidad de que una persona física tenga su CUIT/CUIL escrito en el contrato.
 P_CON_CUIT = 0.6
@@ -52,7 +68,9 @@ def generate_persona(source: Source, rol: Rol) -> Persona:
 
 def generate_propiedad(source: Source) -> Propiedad:
     """Propiedad con dirección coherente; piso y departamento solo si es departamento."""
-    localidad, provincia, codigo_postal = source.rng.choice(LOCALIDADES)
+    provincia = _elegir(source, PESOS_PROVINCIA)
+    candidatas = [fila for fila in LOCALIDADES if fila[1] == provincia]
+    localidad, provincia, codigo_postal = source.rng.choice(candidatas)
     tipo = source.rng.choice(list(TipoPropiedad))
     es_depto = tipo == TipoPropiedad.DEPARTAMENTO
     return Propiedad(

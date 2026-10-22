@@ -133,3 +133,12 @@ Plantilla para cada entrada (copiar y completar):
   - Una cláusula más larga que una página se partiría igual y su evidencia quedaría con la última página. Revisarlo en el paso 4 (cláusulas raras).
   - La cláusula de objeto dice "destino de vivienda" aunque la propiedad sea local u oficina. Revisarlo en el paso 4 o al sumar contratos comerciales.
   - Los bytes del PDF dependen también de la versión de fpdf2 fijada en `uv.lock` (igual que Faker).
+
+### 2026-10-22 — Ajuste de la Fase 1: mayoría de contratos en Mendoza
+- **Qué construí:** seis localidades del Gran Mendoza en `LOCALIDADES` (Godoy Cruz, Guaymallén, Las Heras, Luján de Cuyo, Maipú y San Rafael; CP aproximados) y `PESOS_PROVINCIA` (Mendoza 70 %, CABA 12 %, Buenos Aires 10 %, Córdoba y Santa Fe 4 % cada una). `generate_propiedad` elige en dos etapas: la provincia por peso y una localidad dentro de ella, así el porcentaje no depende de cuántas localidades tenga cada provincia. Tests: los pesos cubren la tabla y suman 1, Mendoza sale entre el 65 % y el 75 % en 2000 propiedades y aparecen todas las localidades. Modelos de contrato de referencia anotados en `docs/fuentes.md`. Verificado: `uv run pytest packages/synthetic` → 785 passed; `ruff check` y `ruff format --check` sin errores.
+- **Qué aprendí:**
+- **Dudas abiertas:**
+  - **Error de dominio:** la cláusula de rescisión usa la regla de la ley anterior (a los 6 meses, con un mes de preaviso) también en contratos DNU, donde se puede rescindir en cualquier momento pagando el 10 % del saldo (art. 1221 del CCyC reformado). Corregirlo según `regimen_legal` en el ajuste de plantillas.
+  - Ajuste de plantillas, antes del paso 4: numeración "ARTÍCULO N", fecha "a los … días del mes de …" y jurisdicción por provincia (verificar cómo se nombran los tribunales de Mendoza).
+  - Para el paso 4 (casos difíciles): guiones de relleno `.-----`, canon escalonado por año, seguro de caución como garantía (sin persona garante) y aspecto de fotocopia escaneada como el modelo de Mendoza.
+  - Verificar los CP de Mendoza contra el Correo Argentino.
