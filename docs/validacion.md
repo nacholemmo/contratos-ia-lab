@@ -15,6 +15,7 @@ Las inmobiliarias pierden tiempo y plata controlando aumentos y vencimientos a m
 5. ¿Qué documentos reciben (contratos, DNI, recibos de sueldo, garantías, seguros) y por qué canal?
 6. ¿Qué sistema usan hoy (planilla, software, nada)?
 7. ¿Cuánto pagarían por mes por algo que resuelva esto?
+8. ¿Nos pueden pasar su plantilla de contrato **en blanco** (sin datos de nadie)? Sirve para que el generador sintético se parezca a los contratos que circulan en Mendoza.
 
 ## Entrevistas
 

@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 from jinja2 import Environment, StrictUndefined
 
-from core.models import Contrato, Persona, Rol
+from core.models import Contrato, Persona, RegimenLegal, Rol
 from synthetic.amounts import EstiloMonto, format_monto
 from synthetic.source import Source
 from synthetic.wording import (
@@ -102,12 +102,6 @@ PLANTILLAS: dict[str, tuple[str, ...]] = {
         "LA PARTE LOCATARIA no podrá subalquilar, ceder ni prestar el inmueble, ni "
         "introducir en él sustancias peligrosas o actividades que perturben a los vecinos.",
     ),
-    "rescision": (
-        "LA PARTE LOCATARIA podrá rescindir el contrato transcurridos seis meses, "
-        "notificando en forma fehaciente con un mes de anticipación.",
-        "Cumplidos los primeros seis (6) meses, LA PARTE LOCATARIA podrá resolver "
-        "anticipadamente la locación, abonando la indemnización que corresponda según ley.",
-    ),
     "jurisdiccion": (
         "Para todos los efectos legales, las partes constituyen domicilio en los indicados en "
         "el encabezado y se someten a la jurisdicción de los tribunales ordinarios del lugar "
@@ -116,6 +110,34 @@ PLANTILLAS: dict[str, tuple[str, ...]] = {
         "válidas todas las notificaciones, y se someten a los tribunales ordinarios "
         "competentes según la ubicación del inmueble.",
     ),
+}
+
+# La rescisión cambia de contenido según el régimen, no solo de forma (art. 1221 del CCyC).
+# Leyes 27.551 y 27.737: desde los 6 meses, con indemnización salvo preaviso de 3 meses.
+RESCISION_LEY: tuple[str, ...] = (
+    "Transcurridos los primeros seis (6) meses, LA PARTE LOCATARIA podrá resolver "
+    "anticipadamente la locación, abonando un mes y medio de alquiler si lo hace durante el "
+    "primer año y un mes si lo hace después. No corresponderá indemnización si notifica "
+    "con una anticipación de tres (3) meses o más.",
+    "LA PARTE LOCATARIA podrá rescindir el contrato una vez cumplidos seis (6) meses de "
+    "vigencia, notificando en forma fehaciente. Deberá abonar en concepto de indemnización "
+    "un mes y medio de alquiler en el primer año y un mes a partir del segundo, salvo que "
+    "el preaviso sea de tres (3) meses o más.",
+)
+# DNU 70/2023: en cualquier momento, pagando el 10 % del canon que falta hasta el final.
+RESCISION_DNU: tuple[str, ...] = (
+    "LA PARTE LOCATARIA podrá resolver anticipadamente la locación en cualquier momento, "
+    "abonando el equivalente al diez por ciento (10%) del saldo del canon locativo futuro, "
+    "calculado desde la notificación hasta la fecha de finalización pactada.",
+    "En cualquier momento de la vigencia, LA PARTE LOCATARIA podrá rescindir el presente "
+    "contrato, debiendo pagar una indemnización del diez por ciento (10%) del saldo de los "
+    "alquileres que restan hasta el vencimiento.",
+)
+
+PLANTILLAS_RESCISION: dict[RegimenLegal, tuple[str, ...]] = {
+    RegimenLegal.LEY_27551: RESCISION_LEY,
+    RegimenLegal.LEY_27737: RESCISION_LEY,
+    RegimenLegal.DNU_70_2023: RESCISION_DNU,
 }
 
 TITULOS = {
@@ -147,8 +169,8 @@ def _personas(source: Source, personas: list[Persona]) -> str:
     return " y ".join(f"{p.nombre}, {frase_documento(source, p.dni, p.cuit)}" for p in personas)
 
 
-def _render(source: Source, nombre: str, **variables: object) -> str:
-    plantilla = source.rng.choice(PLANTILLAS[nombre])
+def _render(source: Source, plantillas: tuple[str, ...], **variables: object) -> str:
+    plantilla = source.rng.choice(plantillas)
     return ENV.from_string(plantilla).render(**variables)
 
 
@@ -167,7 +189,7 @@ def render_clauses(contrato: Contrato, source: Source) -> list[Clause]:
     fecha_firma = frase_fecha(source, c.fecha_firma) if c.fecha_firma else None
     encabezado = _render(
         source,
-        "encabezado",
+        PLANTILLAS["encabezado"],
         localidad=c.propiedad.localidad,
         fecha_firma=fecha_firma or "____ de __________ de 20__",
         locadores=_personas(source, por_rol[Rol.PROPIETARIO]),
@@ -222,7 +244,12 @@ def render_clauses(contrato: Contrato, source: Source) -> list[Clause]:
     cuerpo.append(("rescision", {}, {}))
     cuerpo.append(("jurisdiccion", {}, {}))
 
+    # Cláusulas cuyo contenido depende del contrato (no solo la forma). En el resto del ajuste
+    # se suma la jurisdicción por provincia.
+    por_contrato = {"rescision": PLANTILLAS_RESCISION[c.regimen_legal]}
+
     for i, (nombre, variables, fragmentos) in enumerate(cuerpo):
-        texto = _render(source, nombre, **variables)
+        plantillas = por_contrato[nombre] if nombre in por_contrato else PLANTILLAS[nombre]
+        texto = _render(source, plantillas, **variables)
         clauses.append(Clause(nombre, numerar(i, TITULOS[nombre]), texto, fragmentos))
     return clauses

@@ -2,7 +2,8 @@ from collections import defaultdict
 
 import pytest
 
-from synthetic.clauses import render_clauses
+from core.models import RegimenLegal
+from synthetic.clauses import PLANTILLAS_RESCISION, render_clauses
 from synthetic.contracts import generate_contrato
 from synthetic.source import Source
 
@@ -74,6 +75,27 @@ def test_montos_en_numeros_y_en_letras():
     precios = [next(c for c in _render(s)[1] if c.nombre == "precio").texto for s in SEEDS]
     assert any("PESOS" in t or "DÓLARES" in t for t in precios)
     assert any(("$" in t or "USD" in t) and "PESOS" not in t for t in precios)
+
+
+def test_rescision_cubre_todos_los_regimenes():
+    # Un régimen sin plantilla haría fallar a todos los contratos firmados en ese período.
+    assert set(PLANTILLAS_RESCISION) == set(RegimenLegal)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_rescision_segun_regimen(seed):
+    contrato, clauses = _render(seed)
+    texto = next(c for c in clauses if c.nombre == "rescision").texto
+    es_dnu = contrato.regimen_legal == RegimenLegal.DNU_70_2023
+    # La regla del DNU es el 10 % del saldo; la de las leyes, los 6 meses con indemnización.
+    assert ("diez por ciento (10%)" in texto) == es_dnu
+    assert ("seis (6) meses" in texto) == (not es_dnu)
+
+
+def test_rescision_se_genera_para_los_tres_regimenes():
+    # La Ley 27.737 rigió solo dos meses y medio: verificar que el set la incluye.
+    regimenes = {_render(seed)[0].regimen_legal for seed in SEEDS}
+    assert regimenes == set(RegimenLegal)
 
 
 def test_redaccion_no_cambia_los_datos():
