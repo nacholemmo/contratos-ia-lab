@@ -124,3 +124,12 @@ Plantilla para cada entrada (copiar y completar):
 - **Dudas abiertas:**
   - `monto_en_letras` corrige la apócope solo delante de "mil": alcanza para el rango actual (hasta 1,4 M). Si el generador produce millones ("veintiuno millones"), sumar la regla; el test que barre el rango lo va a detectar.
   - ¿Activar `RUF100` en ruff para detectar `noqa` que ya no hacen falta?
+
+### 2026-10-22 — Fase 1, paso 3: PDF con la marca SINTÉTICO y evidencia por página
+- **Qué construí:** fpdf2 2.8 en `synthetic` y pypdf 6.21 en dev (solo para tests). `pdf.py`: `ContratoPDF` con marca de agua "SINTÉTICO" rotada, aviso arriba y "SINTÉTICO · Página N de M" abajo en cada página; metadatos que lo marcan como sintético y fecha de creación fija (sin ella, la misma semilla daría otros bytes). `_write_clause` mide la cláusula con `multi_cell(dry_run=True)` y salta de página antes si no entra, así cada fragmento queda en una sola página y la página se anota después de escribir. `with_evidence` arma los `<campo>_evidencia` y `clausulas` (expensas y rescisión). `generate_contract(seed) -> (bytes, Contrato)`. En `clauses.py`, cuatro cláusulas sin datos (conservación, prohibiciones, jurisdicción) para que los contratos tengan varias páginas. Tests: mismos bytes por semilla, marca en cada página y cada evidencia encontrada en su página al releer el PDF con pypdf. Verificado: `uv run pytest` → 789 passed; `ruff check` sin errores.
+- **Qué aprendí:**
+- **Dudas abiertas:**
+  - `pdf.unbreakable()` no sirve con un `header()` que usa `rotation()`; por eso la medición manual.
+  - Una cláusula más larga que una página se partiría igual y su evidencia quedaría con la última página. Revisarlo en el paso 4 (cláusulas raras).
+  - La cláusula de objeto dice "destino de vivienda" aunque la propiedad sea local u oficina. Revisarlo en el paso 4 o al sumar contratos comerciales.
+  - Los bytes del PDF dependen también de la versión de fpdf2 fijada en `uv.lock` (igual que Faker).

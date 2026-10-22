@@ -88,11 +88,33 @@ PLANTILLAS: dict[str, tuple[str, ...]] = {
         "Serán a cargo de LA PARTE LOCATARIA los servicios de luz, gas, agua y las expensas "
         "comunes ordinarias. Las expensas extraordinarias corresponden a LA PARTE LOCADORA.",
     ),
+    "conservacion": (
+        "LA PARTE LOCATARIA se obliga a mantener el inmueble en el estado en que lo recibe, "
+        "siendo a su cargo las reparaciones originadas en el uso normal. Las reparaciones "
+        "que no sean consecuencia del uso estarán a cargo de LA PARTE LOCADORA.",
+        "Las mejoras que LA PARTE LOCATARIA introduzca quedarán en beneficio del inmueble, "
+        "sin derecho a reclamo alguno. Toda reparación urgente deberá ser comunicada a LA "
+        "PARTE LOCADORA dentro de las cuarenta y ocho (48) horas de advertida.",
+    ),
+    "prohibiciones": (
+        "Queda prohibido a LA PARTE LOCATARIA ceder el presente contrato, subarrendar total "
+        "o parcialmente el inmueble o darle un destino distinto del pactado.",
+        "LA PARTE LOCATARIA no podrá subalquilar, ceder ni prestar el inmueble, ni "
+        "introducir en él sustancias peligrosas o actividades que perturben a los vecinos.",
+    ),
     "rescision": (
         "LA PARTE LOCATARIA podrá rescindir el contrato transcurridos seis meses, "
         "notificando en forma fehaciente con un mes de anticipación.",
         "Cumplidos los primeros seis (6) meses, LA PARTE LOCATARIA podrá resolver "
         "anticipadamente la locación, abonando la indemnización que corresponda según ley.",
+    ),
+    "jurisdiccion": (
+        "Para todos los efectos legales, las partes constituyen domicilio en los indicados en "
+        "el encabezado y se someten a la jurisdicción de los tribunales ordinarios del lugar "
+        "del inmueble, renunciando a cualquier otro fuero.",
+        "Las partes fijan domicilios especiales en los denunciados en el presente, donde serán "
+        "válidas todas las notificaciones, y se someten a los tribunales ordinarios "
+        "competentes según la ubicación del inmueble.",
     ),
 }
 
@@ -104,7 +126,10 @@ TITULOS = {
     "deposito": "DEPÓSITO EN GARANTÍA",
     "garantia": "GARANTÍA",
     "expensas": "EXPENSAS Y SERVICIOS",
+    "conservacion": "CONSERVACIÓN Y REPARACIONES",
+    "prohibiciones": "PROHIBICIONES",
     "rescision": "RESCISIÓN",
+    "jurisdiccion": "DOMICILIOS Y JURISDICCIÓN",
 }
 
 
@@ -192,7 +217,10 @@ def render_clauses(contrato: Contrato, source: Source) -> list[Clause]:
         cuerpo.append(("garantia", variables, {}))
 
     cuerpo.append(("expensas", {}, {}))
+    cuerpo.append(("conservacion", {}, {}))
+    cuerpo.append(("prohibiciones", {}, {}))
     cuerpo.append(("rescision", {}, {}))
+    cuerpo.append(("jurisdiccion", {}, {}))
 
     for i, (nombre, variables, fragmentos) in enumerate(cuerpo):
         texto = _render(source, nombre, **variables)

@@ -74,7 +74,7 @@ Pasos:
    dólares, monto fijo), frecuencia (3, 4, 6, 12 meses), depósito, rescisión y
    expensas. La misma información, redactada de formas distintas. Montos en números,
    en letras o en ambos.
-3. Render a PDF de varias páginas con la marca "SINTÉTICO" en cada página. El ground
+3. ✅ Render a PDF de varias páginas con la marca "SINTÉTICO" en cada página. El ground
    truth incluye la evidencia real de cada campo (fragmento y página), porque el
    generador sabe dónde puso cada dato.
 4. Casos difíciles, cada uno etiquetado: escaneo torcido (página como imagen con
