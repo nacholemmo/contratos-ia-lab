@@ -12,8 +12,10 @@ Registro de cada paso o fase cerrada. Lo actualiza Claude al cerrar un paso y `/
 | 2 — Clasificación de documentos | pendiente | | |
 | 3 — Extracción por tipo de documento, con evidencia | pendiente | | |
 | 4 — Evaluaciones contra el generador | pendiente | | |
-| 5 — API HTTP con token de servicio | pendiente | | |
-| 6 — Deploy | pendiente | | |
+| 5 — RAG sobre normativa | pendiente | | |
+| 6 — Servidor MCP | pendiente | | |
+| 7 — Agente con LangGraph | pendiente | | |
+| 8 — Deploy y LLMOps | pendiente | | |
 
 ## Registro
 
@@ -110,3 +112,8 @@ Plantilla para cada entrada (copiar y completar):
   - El determinismo depende también de la versión de Faker fijada en `uv.lock`: actualizar Faker puede cambiar los contratos de cada semilla.
   - Fase 4: los pesos `PESOS_*_DNU` son aproximados; ajustarlos con datos reales (docs/validacion.md). Reportar por separado el set representativo y el de casos difíciles.
   - `identity.py`: sobra el `# noqa: F401` del import de `PESOS_CUIT`; `PREFIJO_POR_SEXO` podría tiparse `dict[Sexo, str]`.
+
+### 2026-10-22 — Roadmap alineado con el path AI Engineer / FDE
+- **Qué cambió:** el roadmap sigue el calendario del path (oct.–nov. Fases 1 a 3, dic. evals, ene. RAG, feb. MCP y agente, mar. deploy). La interfaz con Avisa pasa de API REST a un **servidor MCP propio** (Fase 6): sirve al backend de Avisa y a Claude, y el agente lo usa como cliente. Se suman tracing con Langfuse y la comparación de dos modelos o prompts a la Fase 4, el RAG sobre normativa (Fase 5, `packages/normativa`) y el agente con LangGraph (Fase 7, `packages/agent`). El servicio sigue sin estado: esos paquetes lo consumen y él no depende de ellos. El repo pasa a ser público: README actualizado y licencia MIT.
+- **Dudas abiertas:**
+  - Fase 6: si el backend de Avisa llama siempre la misma tool de forma fija, ¿alcanza MCP o conviene sumar un REST mínimo? Revisarlo con el uso real.

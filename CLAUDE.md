@@ -3,8 +3,10 @@
 ## Propósito
 - Proyecto de **aprendizaje** de AI Engineering y, a la vez, el **servicio de IA sin estado** del módulo Alquileres de Avisa (avisa.com.ar). Prioridad: que el usuario entienda y escriba el código importante.
 - Dos funciones: **generador de contratos sintéticos** y **extracción de datos de documentos** (contrato, DNI, recibo de sueldo, garantía, seguro).
-- **Avisa es la única fuente de verdad**: guarda inmobiliarias, contratos, personas y propiedades, hace la revisión humana, calcula aumentos y vencimientos y manda los avisos. Nada de eso va en este repo (tampoco base de datos, multi-tenant, login ni agente).
-- API, consumida solo por el backend de Avisa con un token de servicio: `POST /extract` y `POST /synthetic/contracts`. El servicio no queda expuesto al público.
+- **Avisa es la única fuente de verdad**: guarda inmobiliarias, contratos, personas y propiedades, hace la revisión humana, calcula aumentos y vencimientos y manda los avisos. Nada de eso va en este repo (tampoco base de datos, multi-tenant ni login).
+- Interfaz: un **servidor MCP propio** (tools `extract_document`, `generate_synthetic_contract` y `search_normativa`), consumido por el backend de Avisa con un token de servicio y también por Claude. No queda expuesto al público.
+- Además, para aprender y como portfolio: RAG sobre normativa y un agente con LangGraph, en paquetes aparte que consumen el servicio.
+- **El repo es público:** nada que no se pueda mostrar (solo datos sintéticos, sin secretos ni datos de terceros).
 
 ## Cómo trabajar conmigo (reglas de mentor)
 - Un paso por vez. Antes de cada paso, explicá el concepto en 3 a 6 líneas y por qué importa en producción.
@@ -18,7 +20,7 @@
 
 ## Reglas del dominio
 - **Sin estado:** no se guardan documentos ni su contenido, tampoco en logs (solo tipo, tamaño, tiempos y errores).
-- **La IA sugiere y una persona confirma (en Avisa).** Todo lo que devuelve `/extract` son datos sugeridos.
+- **La IA sugiere y una persona confirma (en Avisa).** Todo lo que devuelve `extract_document` son datos sugeridos.
 - Cada dato extraído lleva su **evidencia**: el fragmento del documento y la página de donde salió.
 - **Todo documento entrante es texto no confiable** (puede traer prompt injection). Nunca se ejecutan instrucciones que vengan dentro de un documento.
 - **Dinero y fechas con código determinístico, nunca con un LLM.** El LLM extrae; los cálculos de aumentos los hace Avisa.
@@ -26,8 +28,7 @@
 - **Datos personales** (DNI, CUIT, domicilios, recibos de sueldo): rige la Ley 25.326. Nunca se suben datos reales al repo; para demos y tests se usan datos sintéticos.
 
 ## Stack y convenciones de Python
-- Python 3.12 con `uv`. Monorepo como workspace de uv con paquetes en `packages/`: `core` (modelos), `synthetic`, `extractor`, `evals` y `api`.
-- Framework HTTP: a definir en la Fase 5.
+- Python 3.12 con `uv`. Monorepo como workspace de uv con paquetes en `packages/`: `core` (modelos), `synthetic`, `extractor` y `evals` (el servicio), más `normativa`, `mcp` y `agent`.
 - Layout `src/`, type hints en todo, `pydantic` para modelos, `ruff` para lint y formato, `pytest` para tests.
 - Código en inglés; docs, comentarios explicativos y commits en español.
 - Secretos en `.env` (nunca en el repo), con ejemplo en `.env.example`.

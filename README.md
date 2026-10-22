@@ -1,14 +1,42 @@
 # contratos-ia-lab
 
-Laboratorio de **aprendizaje de AI Engineering** en Python y MVP de un sistema de gestión de contratos de alquiler para inmobiliarias.
+Servicio de IA **sin estado** para contratos de alquiler en Argentina, construido como
+laboratorio de **aprendizaje de AI Engineering** en Python. Es el servicio de IA del módulo
+Alquileres de [Avisa](https://avisa.com.ar).
 
-La IA lee contratos y documentos (DNI, recibos de sueldo, garantías, seguros), extrae los datos con su evidencia y un administrador los confirma. Un motor determinístico calcula los aumentos (IPC, ICL, Casa Propia) y los vencimientos, y el sistema avisa a tiempo. Regla de orden: primero la IA, después el producto.
+Hace dos cosas:
 
-Es un proyecto de aprendizaje: el foco está en entender cada pieza, no en terminar rápido.
+1. **Genera contratos sintéticos**: determinísticos (misma semilla, mismo contrato), con
+   personas, DNI y CUIT válidos, redacción variada y casos difíciles. Son el ground truth
+   para medir la extracción.
+2. **Extrae datos de documentos** (contrato, DNI, recibo de sueldo, garantía, seguro): cada
+   dato sale con su evidencia (fragmento y página) y como *sugerencia*; la confirma una persona.
 
-- Hoja de ruta: [docs/roadmap.md](docs/roadmap.md)
-- Progreso: [docs/progreso.md](docs/progreso.md)
-- Fuentes de datos: [docs/fuentes.md](docs/fuentes.md)
-- Validación con inmobiliarias: [docs/validacion.md](docs/validacion.md)
+La interfaz es un servidor **MCP** propio, que usan el backend de Avisa y Claude. Para
+aprender, el repo suma un RAG sobre la normativa de alquileres y un agente con LangGraph.
 
-> El repo solo contiene datos sintéticos. Nunca se suben contratos reales ni datos personales de terceros (Ley 25.326).
+## Principios
+
+- **Sin estado:** no guarda documentos ni su contenido, tampoco en logs.
+- **La IA sugiere, una persona confirma.** Los cálculos de dinero y fechas los hace código
+  determinístico, nunca un LLM.
+- **Los documentos son texto no confiable** (prompt injection).
+- **Solo datos sintéticos** en el repo (Ley 25.326).
+
+## Estado
+
+Ver la hoja de ruta en [docs/roadmap.md](docs/roadmap.md) y el registro de cada paso en
+[docs/progreso.md](docs/progreso.md).
+
+## Stack
+
+Python 3.12 · workspace de [uv](https://docs.astral.sh/uv/) · pydantic · pytest · ruff.
+
+```bash
+uv sync
+uv run pytest
+```
+
+## Licencia
+
+[MIT](LICENSE)

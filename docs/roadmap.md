@@ -6,6 +6,13 @@ documentos. Avisa es la única fuente de verdad: guarda inmobiliarias, contratos
 personas y propiedades, hace la revisión humana, calcula aumentos y vencimientos y
 manda los avisos.
 
+Ajuste del 2026-10-22: el roadmap se alinea con el path de carrera (AI Engineer / FDE).
+La interfaz con Avisa es un **servidor MCP propio** (no una API REST), y se suman, como
+paquetes aparte que consumen el servicio, un RAG sobre normativa y un agente con LangGraph.
+El repo es público.
+
+Calendario: oct.–nov. Fases 1 a 3 · dic. Fase 4 · ene. Fase 5 · feb. Fases 6 y 7 · mar. Fase 8.
+
 Recursos: [Scrimba] = AI Engineer Path de Scrimba · [Path] = Path autodidacta: AI Engineer.
 
 ## Principios del servicio
@@ -23,12 +30,12 @@ Recursos: [Scrimba] = AI Engineer Path de Scrimba · [Path] = Path autodidacta: 
 ## Fuera de este repo
 Base de datos, multi-tenant, usuarios y login, cálculo de aumentos y vencimientos,
 series de índices, avisos (email y WhatsApp) y pantalla de revisión: todo eso vive en
-Avisa. El agente de la ex Fase 6, si se hace, irá más adelante y consultará la API de
 Avisa. El fine-tuning también queda afuera por ahora.
 
 RAG: no hace falta para extraer, porque un contrato entra entero en el contexto.
-- Sobre normativa: candidato a servicio aparte (corpus público, índice de solo lectura).
-- Sobre contratos: dentro de Avisa o del agente, donde están los datos.
+- Sobre normativa: en este repo, como paquete aparte (Fase 5): corpus público e índice
+  de solo lectura, sin datos personales.
+- Sobre contratos: no se hace acá; los contratos viven en Avisa.
 
 ## Paquetes
 - `packages/core` — modelos pydantic: esquemas de salida de la extracción y ground
@@ -36,7 +43,12 @@ RAG: no hace falta para extraer, porque un contrato entra entero en el contexto.
 - `packages/synthetic` — generador de contratos y documentos sintéticos.
 - `packages/extractor` — clasificación y extracción.
 - `packages/evals` — evaluaciones contra el generador.
-- `packages/api` — servicio HTTP.
+- `packages/normativa` — RAG sobre el Código Civil y el DNU 70/2023.
+- `packages/mcp` — servidor MCP: la interfaz para Avisa y para Claude.
+- `packages/agent` — agente con LangGraph, cliente del servidor MCP.
+
+`core`, `synthetic`, `extractor` y `evals` forman el servicio sin estado. `normativa` y
+`agent` lo consumen; el servicio no depende de ellos.
 
 ## Fase 0 — Setup del laboratorio ✅
 Objetivo: monorepo listo para trabajar.
@@ -111,7 +123,7 @@ para los 5 tipos, con tests sobre documentos sintéticos.
 ## Fase 4 — Evaluaciones contra el generador (packages/evals)
 Objetivo: saber cuán bien extrae el servicio, campo por campo, y detectar regresiones.
 Recursos: [Path] semana 5.
-Conceptos: ground truth, métricas por campo, comparación normalizada, evals de regresión.
+Conceptos: ground truth, métricas por campo, comparación normalizada, evals de regresión, tracing.
 Pasos:
 1. Comparadores por tipo de campo: exacto (CUIT, fechas), numérico (montos como
    Decimal), texto normalizado (nombres, direcciones).
@@ -119,35 +131,73 @@ Pasos:
 3. Evaluación de la evidencia: ¿el fragmento y la página coinciden con los del generador?
 4. Robustez: tasa de éxito de los casos con prompt injection.
 5. Costo y latencia por documento; reporte en Markdown.
-6. Set chico de regresión que corre en CI.
-Terminado cuando: un comando genera el reporte de precisión por campo y por tipo, y el
-set de regresión corre en CI.
+6. Tracing con Langfuse: cada extracción deja su traza (llamadas, tokens, costo,
+   latencia), sin contenido de documentos reales.
+7. Comparar dos modelos o dos prompts sobre el mismo set y documentar cuál gana y por qué.
+8. Set chico de regresión que corre en CI.
+Terminado cuando: un comando genera el reporte de precisión por campo y por tipo, hay
+una comparación documentada de dos modelos o prompts y el set de regresión corre en CI.
 
-## Fase 5 — API HTTP con token de servicio (packages/api)
-Objetivo: Avisa consume `/extract` y `/synthetic/contracts`.
-Recursos: [Scrimba] Deployment.
-Conceptos: diseño de API, contratos de respuesta, autenticación servicio a servicio, servicios sin estado.
+## Fase 5 — RAG sobre normativa (packages/normativa)
+Objetivo: preguntas sobre la ley de alquileres respondidas con cita al artículo.
+Recursos: [Scrimba] Embeddings and Vector Databases · [Path] semana 3.
+Conceptos: chunking, embeddings, búsqueda vectorial, búsqueda híbrida, reranking, citas.
 Pasos:
-1. Elegir el framework HTTP (comparar opciones y justificar).
-2. `POST /extract`: recibe PDF o imagen; devuelve tipo, campos, evidencia y
-   advertencias, marcados como sugeridos. Límites de tamaño y de tipo de archivo.
-3. `POST /synthetic/contracts`: semilla opcional; devuelve el PDF y sus datos correctos,
-   marcados como sintéticos.
-4. Token de servicio compartido con Avisa (comparación en tiempo constante, desde `.env`).
-5. Sin estado: el documento solo vive en memoria durante la request; logs sin
-   contenido (solo tipo, tamaño, tiempos y errores). Tests que lo verifican.
-6. Esquema OpenAPI versionado para que Avisa lo consuma.
-Terminado cuando: los tests de la API pasan (auth, extracción, semilla reproducible,
-logs sin contenido) y el OpenAPI está publicado en el repo.
+1. Bajar el capítulo de locación del Código Civil y Comercial y el DNU 70/2023
+   (InfoLEG y Boletín Oficial), con scraping responsable y caché.
+2. Chunking por artículo (la unidad natural de la ley) e índice de solo lectura.
+3. Búsqueda vectorial, después híbrida (vectorial + palabras clave).
+4. Reranking de resultados.
+5. Respuesta con cita al artículo; si la ley no lo dice, "no encontré" en vez de inventar.
+6. Set de preguntas con su artículo correcto y métricas de recuperación y de respuesta,
+   midiendo cuánto mejora cada técnica.
+Terminado cuando: hay una tabla con la mejora de vectorial → híbrida → reranking sobre el
+set de preguntas, y cada respuesta cita su artículo.
 
-## Fase 6 — Deploy
-Objetivo: el servicio corre en un entorno al que solo llega el backend de Avisa.
-Conceptos: contenedores, secretos, red privada, healthchecks, observabilidad sin datos personales.
+## Fase 6 — Servidor MCP (packages/mcp)
+Objetivo: Avisa (y Claude) usan el servicio a través de un servidor MCP propio.
+Recursos: [Scrimba] Model Context Protocol · Anthropic Academy: Introduction to MCP.
+Conceptos: MCP (tools, esquemas, transportes), cliente vs. servidor, autenticación servicio a servicio.
+Pasos:
+1. Servidor mínimo con una tool, probado desde Claude Code (transporte stdio).
+2. Tool `extract_document`: recibe PDF o imagen (base64, con límite de tamaño); devuelve
+   tipo, campos, evidencia y advertencias como datos sugeridos, con `outputSchema`
+   derivado de los modelos de core.
+3. Tool `generate_synthetic_contract`: semilla opcional; devuelve el PDF y sus datos
+   correctos, marcados como sintéticos.
+4. Tool `search_normativa`: consulta el RAG de la Fase 5 con cita al artículo.
+5. Transporte Streamable HTTP con token de servicio (comparación en tiempo constante, desde `.env`).
+6. Sin estado: el documento solo vive en memoria durante la llamada; logs sin contenido.
+   Tests que lo verifican.
+7. Cliente de prueba que simula a Avisa (y guía para conectarlo desde el backend NestJS).
+Terminado cuando: los tests del servidor pasan (auth, extracción, semilla reproducible,
+logs sin contenido) y las tres tools funcionan desde Claude Code y desde el cliente de prueba.
+
+## Fase 7 — Agente con LangGraph (packages/agent)
+Objetivo: un flujo multi-agente con estado que usa las tools del servidor MCP.
+Recursos: [Scrimba] Agents, Context Engineering · [Path] semana 4.
+Conceptos: orquestación con estado, supervisor/worker, human-in-the-loop, agentes como clientes MCP.
+Pasos:
+1. Grafo mínimo en LangGraph con estado tipado.
+2. Workers: clasificador, extractor y consultor de normativa, cada uno vía MCP.
+3. Supervisor que decide el siguiente paso según el tipo de documento y las advertencias.
+4. Human-in-the-loop: los casos dudosos se pausan para revisión y siguen con la respuesta.
+5. Evals del agente sobre el set sintético (¿llega al resultado correcto? ¿cuántos pasos y cuánto cuesta?).
+Terminado cuando: el agente procesa un lote sintético de punta a punta, con pausa de
+revisión en los casos dudosos y un reporte de precisión, pasos y costo.
+
+## Fase 8 — Deploy y LLMOps
+Objetivo: el servidor MCP corre en un entorno al que solo llega Avisa, con costos y calidad a la vista.
+Recursos: [Scrimba] Deployment · [Path] semana 7.
+Conceptos: contenedores, secretos, red privada, versionado de prompts, evals en CI, observabilidad sin datos personales.
 Pasos:
 1. Imagen Docker reproducible a partir del workspace de uv.
 2. Secretos (token de servicio, API key del LLM) fuera de la imagen.
 3. Red privada: el servicio no queda expuesto al público.
-4. Healthcheck y métricas (latencia, errores, costo) sin contenido de documentos.
-5. Prueba de punta a punta desde un cliente que simula a Avisa.
-Terminado cuando: el servicio está desplegado, el healthcheck responde y una extracción
-de punta a punta funciona con un documento sintético.
+4. CI/CD que corre los tests y el set de regresión de evals en cada cambio.
+5. Versionado de prompts y modelos: cada extracción registra con qué versión se hizo.
+6. Healthcheck y métricas (costo y latencia por contrato, errores) sin contenido de documentos.
+7. Prueba de punta a punta desde el cliente que simula a Avisa, y post técnico con las
+   decisiones y los números.
+Terminado cuando: el servicio está desplegado, una extracción de punta a punta funciona
+con un documento sintético y el costo y la latencia por contrato están a la vista.
