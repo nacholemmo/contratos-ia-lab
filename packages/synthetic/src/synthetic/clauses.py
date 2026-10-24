@@ -191,8 +191,14 @@ class Clause:
     fragmentos: dict[str, str] = field(default_factory=dict)
 
 
+def _persona(source: Source, p: Persona) -> str:
+    # Sin DNI ni CUIT (caso difícil) queda solo el nombre, sin una coma colgando.
+    documento = frase_documento(source, p.dni, p.cuit)
+    return f"{p.nombre}, {documento}" if documento else p.nombre
+
+
 def _personas(source: Source, personas: list[Persona]) -> str:
-    return " y ".join(f"{p.nombre}, {frase_documento(source, p.dni, p.cuit)}" for p in personas)
+    return " y ".join(_persona(source, p) for p in personas)
 
 
 def _render(source: Source, plantillas: tuple[str, ...], **variables: object) -> str:
@@ -200,12 +206,17 @@ def _render(source: Source, plantillas: tuple[str, ...], **variables: object) ->
     return ENV.from_string(plantilla).render(**variables)
 
 
-def _estilo_monto(source: Source) -> EstiloMonto:
+def _estilo_monto(source: Source, solo_letras: bool) -> EstiloMonto:
+    if solo_letras:
+        return EstiloMonto.LETRAS
     return source.rng.choices(list(EstiloMonto), weights=[0.3, 0.2, 0.5])[0]
 
 
-def render_clauses(contrato: Contrato, source: Source) -> list[Clause]:
-    """Cláusulas del contrato en orden, con variantes elegidas por `source`."""
+def render_clauses(contrato: Contrato, source: Source, solo_letras: bool = False) -> list[Clause]:
+    """Cláusulas del contrato en orden, con variantes elegidas por `source`.
+
+    `solo_letras` fuerza todos los montos en letras (caso difícil MONTOS_SOLO_LETRAS).
+    """
     c = contrato
     por_rol = {rol: [p for p in c.partes if p.rol == rol] for rol in Rol}
     numerar = source.rng.choice(
@@ -256,7 +267,7 @@ def render_clauses(contrato: Contrato, source: Source) -> list[Clause]:
         )
     )
 
-    monto = format_monto(c.monto_inicial, c.moneda, _estilo_monto(source))
+    monto = format_monto(c.monto_inicial, c.moneda, _estilo_monto(source, solo_letras))
     cuerpo.append(("precio", {"monto": monto}, {"monto_inicial": monto, "moneda": monto}))
 
     ajuste = frase_ajuste(source, c.indice, c.frecuencia_ajuste_meses)
@@ -266,7 +277,7 @@ def render_clauses(contrato: Contrato, source: Source) -> list[Clause]:
     cuerpo.append(("ajuste", {"ajuste": ajuste}, fragmentos_ajuste))
 
     if c.deposito is not None:
-        deposito = format_monto(c.deposito, c.moneda, _estilo_monto(source))
+        deposito = format_monto(c.deposito, c.moneda, _estilo_monto(source, solo_letras))
         cuerpo.append(("deposito", {"deposito": deposito}, {"deposito": deposito}))
 
     garantes = por_rol[Rol.GARANTE]

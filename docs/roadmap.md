@@ -77,9 +77,17 @@ Pasos:
 3. ✅ Render a PDF de varias páginas con la marca "SINTÉTICO" en cada página. El ground
    truth incluye la evidencia real de cada campo (fragmento y página), porque el
    generador sabe dónde puso cada dato.
-4. Casos difíciles, cada uno etiquetado: escaneo torcido (página como imagen con
-   rotación y ruido), montos solo en letras, cláusulas raras y datos faltantes (con el
-   campo en null en el ground truth).
+4. Casos difíciles, cada uno etiquetado en el ground truth (`Muestra.casos`), para
+   reportar la precisión por caso en la Fase 4. Cada semilla elige sus casos y un test
+   puede forzarlos. En tres subpasos:
+   - 4a. Etiquetas (`CasoDificil`), datos faltantes (fecha de firma en blanco, persona
+     sin DNI ni CUIT, sin código postal; el campo en null en el ground truth) y montos
+     solo en letras.
+   - 4b. Cláusulas raras: canon escalonado por año, seguro de caución como garantía,
+     guiones de relleno `.-----`, destino comercial para locales y oficinas, y una
+     cláusula más larga que una página.
+   - 4c. Escaneo torcido: páginas como imagen, con rotación, ruido y aspecto de
+     fotocopia, sin capa de texto.
 5. Documentos complementarios simples: DNI, recibo de sueldo, garantía y seguro. Sus
    modelos pydantic se agregan a core.
 6. CLI: `uv run --package synthetic generate --n 50 --seed 42 --out data/synthetic/`,

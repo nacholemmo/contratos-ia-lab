@@ -10,6 +10,7 @@ from fpdf import FPDF
 from fpdf.enums import MethodReturnValue, XPos, YPos
 
 from core.models import Contrato, Evidencia
+from synthetic.cases import CasoDificil, Muestra, aplicar_faltantes, elegir_casos, normalizar_casos
 from synthetic.clauses import Clause, render_clauses
 from synthetic.contracts import generate_contrato
 from synthetic.source import Source
@@ -130,9 +131,27 @@ def with_evidence(contrato: Contrato, clauses: list[Clause], paginas: dict[str, 
     return contrato.model_copy(update=update)
 
 
-def generate_contract(seed: int) -> tuple[bytes, Contrato]:
-    """PDF sintético y su ground truth con evidencia (misma semilla → mismos bytes)."""
-    contrato = generate_contrato(seed)
-    clauses = render_clauses(contrato, Source(seed).derive("redaccion"))
+def generate_sample(seed: int, casos: list[CasoDificil] | None = None) -> tuple[bytes, Muestra]:
+    """PDF sintético y su ground truth etiquetado (misma semilla → mismos bytes).
+
+    Sin `casos`, la semilla elige los suyos; con `casos`, se fuerzan esos (`[]` da un
+    contrato limpio). Los casos usan su propia sub-fuente: elegirlos no cambia los datos
+    ni la redacción del resto del contrato.
+    """
+    fuente_casos = Source(seed).derive("casos")
+    casos = normalizar_casos(elegir_casos(fuente_casos) if casos is None else casos)
+    contrato = aplicar_faltantes(generate_contrato(seed), casos, fuente_casos)
+    clauses = render_clauses(
+        contrato,
+        Source(seed).derive("redaccion"),
+        solo_letras=CasoDificil.MONTOS_SOLO_LETRAS in casos,
+    )
     pdf, paginas = render_pdf(clauses)
-    return pdf, with_evidence(contrato, clauses, paginas)
+    muestra = Muestra(seed=seed, casos=casos, contrato=with_evidence(contrato, clauses, paginas))
+    return pdf, muestra
+
+
+def generate_contract(seed: int) -> tuple[bytes, Contrato]:
+    """PDF sintético y su ground truth con evidencia, sin las etiquetas de casos."""
+    pdf, muestra = generate_sample(seed)
+    return pdf, muestra.contrato

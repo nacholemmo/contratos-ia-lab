@@ -162,3 +162,17 @@ Plantilla para cada entrada (copiar y completar):
   - Para el paso 4 (casos difíciles): guiones de relleno `.-----`, canon escalonado por año, seguro de caución como garantía (sin persona garante) y aspecto de fotocopia escaneada como el modelo de Mendoza.
   - Verificar los CP de Mendoza contra el Correo Argentino.
   - Fase 3 (esquema de extracción): campos candidatos que salieron del modelo del GCBA y que Avisa podría usar: día de pago ("del 1 al 10 de cada mes", útil para vencimientos y avisos), tasa o regla de mora y tipo de garantía (persona garante o seguro de caución). Decidirlo con el uso real.
+
+### 2026-10-24 — Fase 1, paso 4a: casos difíciles etiquetados, datos faltantes y montos en letras
+- **Qué construí:** el paso 4 queda dividido en 4a, 4b y 4c en el roadmap. `cases.py`: `CasoDificil` (fecha de firma en blanco, persona sin DNI ni CUIT, sin código postal, montos solo en letras) con su probabilidad en `P_CASO`; `elegir_casos` (mía: un sorteo independiente por caso con `source.rng`, así se pueden combinar); `normalizar_casos` (sin repetidos y en el orden del enum) y `aplicar_faltantes` (los datos faltantes en null con `model_copy`). `Muestra`: seed, `sintetico=True`, casos y contrato; es el ground truth etiquetado que va a escribir la CLI. `generate_sample(seed, casos=None)`: la semilla elige sus casos o un test los fuerza (`[]` da un contrato limpio); `generate_contract` mantiene su firma. La redacción ya no deja "(CP None)" ni comas colgando, y `render_clauses(..., solo_letras=True)` fuerza los montos en letras. Verificado: `uv run pytest packages/synthetic` → 1366 passed; `ruff check` y `ruff format --check` sin errores.
+- **Qué aprendí:**
+  - **Variación controlada y etiquetado:** un set de evaluación sirve para diagnosticar, no solo para poner una nota. Con la etiqueta de cada caso, la Fase 4 puede decir "acierta el 98 % en contratos limpios y el 60 % con montos en letras" en vez de un promedio que esconde dónde falla.
+  - Las etiquetas no van en `Contrato` (lo que el LLM extrae y no puede saber), sino en un envoltorio del set (`Muestra`).
+  - "No hay" y "no figura" son cosas distintas: `deposito = None` hoy significa que no hay depósito. Por eso los faltantes de 4a son campos donde null solo puede significar "no figura".
+  - Los casos usan su propia sub-fuente (`derive("casos")`): sumar un caso no cambia el contrato de ninguna semilla existente. Sortear siempre todos los casos consume siempre la misma cantidad de números del rng.
+  - Con sorteos independientes, la proporción de contratos limpios sale de multiplicar las probabilidades (0,9⁴ ≈ 66 %), no de una constante: al sumar casos se achica sola.
+  - Python: la indentación es la sintaxis (lo que en JS son las llaves); un bloque con 3 espacios y otro con 4 da `IndentationError`. Una línea vacía con espacios la corrige `ruff format`.
+- **Dudas abiertas:**
+  - Si 4b y 4c suman casos al 10 %, el set limpio baja del 50 % y falla `test_la_mayoria_de_los_contratos_queda_limpia`: bajar las probabilidades o generar un set limpio aparte.
+  - Fecha de firma en blanco: el ground truth conserva `regimen_legal` de la fecha real. Relacionado con la duda de la Fase 4 sobre qué hace el extractor si `fecha_firma` es null.
+  - Faltante del depósito (la cláusula está pero sin monto): el modelo no lo puede distinguir de "no hay depósito". Decidirlo si aparece en contratos reales.

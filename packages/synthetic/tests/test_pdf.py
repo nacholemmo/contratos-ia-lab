@@ -5,7 +5,7 @@ from pypdf import PdfReader
 
 from core.models import Contrato
 from synthetic.contracts import generate_contrato
-from synthetic.pdf import AVISO, MARCA, generate_contract
+from synthetic.pdf import AVISO, MARCA, generate_contract, generate_sample
 
 SEEDS = range(50)
 
@@ -62,7 +62,9 @@ def test_todo_dato_presente_tiene_evidencia(seed):
 
 @pytest.mark.parametrize("seed", range(10))
 def test_ground_truth_no_cambia_los_datos(seed):
-    _, contrato = generate_contract(seed)
+    # Sin casos difíciles: los faltantes sí cambian datos a propósito (test_cases.py).
+    _, muestra = generate_sample(seed, casos=[])
+    contrato = muestra.contrato
     excluir = {f"{c}_evidencia" for c in CAMPOS_CON_EVIDENCIA} | {"clausulas"}
     assert contrato.model_dump(exclude=excluir) == generate_contrato(seed).model_dump(
         exclude=excluir

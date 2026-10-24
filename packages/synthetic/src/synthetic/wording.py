@@ -133,9 +133,9 @@ def frase_propiedad(source: Source, p: Propiedad) -> str:
         unidad = f", piso {p.piso}, departamento {p.departamento}"
     provincia = "Ciudad Autónoma de Buenos Aires" if p.provincia == "CABA" else p.provincia
     nombre, g = NOMBRE_TIPO[p.tipo]
+    cp = f" (CP {p.codigo_postal})" if p.codigo_postal is not None else ""
     variantes = (
-        f"{nombre} ubicad{g} en {p.calle} {p.numero}{unidad}, "
-        f"{p.localidad}, {provincia} (CP {p.codigo_postal})",
+        f"{nombre} ubicad{g} en {p.calle} {p.numero}{unidad}, {p.localidad}, {provincia}{cp}",
         f"{nombre} sit{g} en la calle {p.calle} N° {p.numero}{unidad}, "
         f"localidad de {p.localidad}, provincia de {provincia}",
     )
