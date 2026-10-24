@@ -255,6 +255,70 @@ class DNI(BaseModel):
     domicilio_evidencia: Evidencia | None = None
 
 
+class ReciboSueldo(BaseModel):
+    """Recibo de haberes de un empleado en relación de dependencia, tal como figura.
+
+    Solo lo que Avisa usa para evaluar a un inquilino: quién paga, a quién, de qué mes,
+    desde cuándo trabaja ahí y cuánto cobra. Sin CBU, banco, legajo, categoría ni el
+    detalle de cada concepto (minimización, Ley 25.326). Los montos los lee el LLM; si
+    neto = bruto - descuentos lo verifica código determinístico, nunca el LLM.
+    """
+
+    empleador: str = Field(
+        ..., min_length=1, description="Razón social del empleador tal como figura en el recibo"
+    )
+    empleador_cuit: str | None = Field(
+        None,
+        pattern=r"^\d{11}$",
+        description=(
+            "CUIT del empleador, 11 dígitos sin guiones (ej. 30712345671); null si no figura"
+        ),
+    )
+    empleado: str = Field(
+        ...,
+        min_length=1,
+        description="Apellido y nombre del empleado tal como figura (ej. 'PÉREZ, JUAN IGNACIO')",
+    )
+    empleado_cuil: str | None = Field(
+        None,
+        pattern=r"^\d{11}$",
+        description="CUIL del empleado, 11 dígitos sin guiones; null si no figura",
+    )
+    periodo: str | None = Field(
+        None,
+        pattern=r"^\d{4}-(0[1-9]|1[0-2])$",
+        description="Mes liquidado, AAAA-MM (ej. '2025-09'); null si no figura",
+    )
+    fecha_ingreso: date | None = Field(
+        None, description="Fecha de ingreso al empleo, AAAA-MM-DD; null si no figura"
+    )
+    remuneracion_bruta: Monto | None = Field(
+        None, description="Total de haberes (bruto) en pesos; null si no figura"
+    )
+    total_descuentos: Monto | None = Field(
+        None, description="Total de descuentos (aportes) en pesos; null si no figura"
+    )
+    neto: Monto | None = Field(None, description="Neto a cobrar en pesos; null si no figura")
+
+    empleador_evidencia: Evidencia | None = None
+    empleador_cuit_evidencia: Evidencia | None = None
+    empleado_evidencia: Evidencia | None = None
+    empleado_cuil_evidencia: Evidencia | None = None
+    periodo_evidencia: Evidencia | None = None
+    fecha_ingreso_evidencia: Evidencia | None = None
+    remuneracion_bruta_evidencia: Evidencia | None = None
+    total_descuentos_evidencia: Evidencia | None = None
+    neto_evidencia: Evidencia | None = None
+
+    @field_validator("empleador_cuit", "empleado_cuil")
+    @classmethod
+    def _validar_digito_verificador(cls, v: str | None) -> str | None:
+        # Corre después del pattern, igual que en Persona.
+        if v is not None and not cuit_valido(v):
+            raise ValueError("dígito verificador del CUIT inválido")
+        return v
+
+
 class TipoDocumento(StrEnum):
     """Tipo de archivo que entra al sistema; lo decide el clasificador de la Fase 3."""
 
@@ -294,6 +358,7 @@ __all__ = [
     "Monto",
     "Persona",
     "Propiedad",
+    "ReciboSueldo",
     "RegimenLegal",
     "Rol",
     "Sexo",

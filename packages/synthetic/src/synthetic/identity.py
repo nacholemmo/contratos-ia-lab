@@ -28,6 +28,16 @@ def _digito_verificador(base: str) -> int:
     return digito
 
 
+def cuit_empresa(rng: random.Random) -> str:
+    """CUIT de persona jurídica: prefijo 30 (33 si el verificador daría 10) + 8 dígitos + DV."""
+    while True:
+        base = str(rng.randint(50_000_000, 72_999_999))
+        for prefijo in ("30", "33"):
+            digito = _digito_verificador(prefijo + base)
+            if digito != 10:
+                return prefijo + base + str(digito)
+
+
 def cuit_from_dni(dni: str, sexo: Sexo) -> str:
     """CUIL de 11 dígitos derivado del DNI: prefijo (2) + DNI con ceros a la izquierda (8) + DV (1).
 

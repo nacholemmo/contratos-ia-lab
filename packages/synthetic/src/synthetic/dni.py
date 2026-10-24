@@ -14,7 +14,7 @@ from uuid import UUID
 
 from fpdf.enums import XPos, YPos
 
-from core.models import DNI, Evidencia, Sexo
+from core.models import DNI, Contrato, Evidencia, Sexo
 from synthetic.contracts import LOCALIDADES, Identidad, generate_contrato_con_identidades
 from synthetic.pdf import ContratoPDF, marcar_sintetico
 from synthetic.source import Source
@@ -49,7 +49,7 @@ ALTO_FILA = 9
 ANCHO_ETIQUETA = 55
 
 
-def _sumar_anios(d: date, anios: int) -> date:
+def sumar_anios(d: date, anios: int) -> date:
     """`d` corrida `anios` años (negativo: hacia atrás).
 
     Un 29 de febrero que cae en un año no bisiesto pasa al 1 de marzo si se avanza (el
@@ -78,19 +78,19 @@ def fechas_dni(source: Source, fecha_referencia: date) -> tuple[date, date, date
     # Entre EDAD_MIN y EDAD_MAX años cumplidos: quien cumple EDAD_MAX + 1 ese día ya no entra.
     nacimiento = _fecha_entre(
         source,
-        _sumar_anios(fecha_referencia, -(EDAD_MAX + 1)) + timedelta(days=1),
-        _sumar_anios(fecha_referencia, -EDAD_MIN),
+        sumar_anios(fecha_referencia, -(EDAD_MAX + 1)) + timedelta(days=1),
+        sumar_anios(fecha_referencia, -EDAD_MIN),
     )
     # DNI vigente a la firma: emitido en los últimos 15 años y nunca antes de los 14 de edad.
     emision = _fecha_entre(
         source,
         max(
-            _sumar_anios(nacimiento, EDAD_ULTIMA_ACTUALIZACION),
-            _sumar_anios(fecha_referencia, -VIGENCIA_DNI_ANIOS) + timedelta(days=1),
+            sumar_anios(nacimiento, EDAD_ULTIMA_ACTUALIZACION),
+            sumar_anios(fecha_referencia, -VIGENCIA_DNI_ANIOS) + timedelta(days=1),
         ),
         fecha_referencia,
     )
-    vencimiento = _sumar_anios(emision, VIGENCIA_DNI_ANIOS)
+    vencimiento = sumar_anios(emision, VIGENCIA_DNI_ANIOS)
     return nacimiento, emision, vencimiento
 
 
@@ -180,6 +180,19 @@ def generate_dni_doc(
     return pdf, dni.model_copy(update=update)
 
 
+def referencia_legajo(contrato: Contrato) -> date:
+    """Fecha que hace de "hoy" en los documentos del legajo: la de firma del contrato limpio."""
+    # El contrato limpio siempre tiene fecha de firma (el caso de fecha en blanco va aparte).
+    return contrato.fecha_firma or contrato.fecha_inicio
+
+
+def fuente_dni(seed: int, persona_id: UUID) -> Source:
+    """Sub-fuente del DNI de una parte. Otro documento del legajo que necesite sus datos
+    (ej. la fecha de nacimiento en el recibo) los recalcula con `generate_dni_data` y esta
+    misma fuente, sin renderizar la ficha."""
+    return Source(seed).derive(f"dni:{persona_id}")
+
+
 def generate_dnis(seed: int) -> dict[UUID, tuple[bytes, DNI]]:
     """Ficha de DNI de cada parte del contrato de la semilla (por `Persona.id`).
 
@@ -188,11 +201,8 @@ def generate_dnis(seed: int) -> dict[UUID, tuple[bytes, DNI]]:
     sub-fuente, así sumar un garante no cambia el DNI de los demás.
     """
     contrato, identidades = generate_contrato_con_identidades(seed)
-    # El contrato limpio siempre tiene fecha de firma (el caso de fecha en blanco va aparte).
-    referencia = contrato.fecha_firma or contrato.fecha_inicio
+    referencia = referencia_legajo(contrato)
     return {
-        persona_id: generate_dni_doc(
-            identidad, referencia, Source(seed).derive(f"dni:{persona_id}")
-        )
+        persona_id: generate_dni_doc(identidad, referencia, fuente_dni(seed, persona_id))
         for persona_id, identidad in identidades.items()
     }

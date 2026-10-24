@@ -14,6 +14,7 @@ from core.models import (
     Indice,
     Moneda,
     Persona,
+    ReciboSueldo,
     RegimenLegal,
     Rol,
     Sexo,
@@ -147,5 +148,59 @@ def test_dni_todo_dato_tiene_su_evidencia():
     datos = {n for n in DNI.model_fields if not n.endswith("_evidencia")}
     evidencias = {
         n.removesuffix("_evidencia") for n in DNI.model_fields if n.endswith("_evidencia")
+    }
+    assert datos == evidencias
+
+
+# --- ReciboSueldo ---
+
+
+def test_recibo_minimo_con_empleador_y_empleado():
+    recibo = ReciboSueldo(empleador="Comercial Ejemplo del Oeste S.A.", empleado="PÉREZ, JUAN")
+    assert recibo.neto is None
+    assert recibo.periodo is None
+
+
+def test_recibo_solo_empleador_y_empleado_son_obligatorios():
+    requeridos = set(ReciboSueldo.model_json_schema()["required"])
+    assert requeridos == {"empleador", "empleado"}
+
+
+def test_recibo_completo_valido():
+    recibo = ReciboSueldo(
+        empleador="Comercial Ejemplo del Oeste S.A.",
+        empleador_cuit=CUIT_VALIDO_PROPIETARIO,
+        empleado="PÉREZ, JUAN",
+        empleado_cuil=CUIT_VALIDO_INQUILINO,
+        periodo="2025-09",
+        fecha_ingreso=date(2019, 3, 1),
+        remuneracion_bruta=Decimal("1200000.00"),
+        total_descuentos=Decimal("204000.00"),
+        neto=Decimal("996000.00"),
+    )
+    assert recibo.neto == recibo.remuneracion_bruta - recibo.total_descuentos
+
+
+@pytest.mark.parametrize("campo", ["empleador_cuit", "empleado_cuil"])
+def test_recibo_cuit_con_digito_invalido_rechazado(campo):
+    with pytest.raises(ValidationError, match="dígito verificador"):
+        ReciboSueldo(empleador="X S.A.", empleado="PÉREZ, JUAN", **{campo: CUIT_DIGITO_INVALIDO})
+
+
+@pytest.mark.parametrize("periodo", ["2025-13", "2025-9", "09/2025", "2025-00"])
+def test_recibo_periodo_con_formato_invalido_rechazado(periodo):
+    with pytest.raises(ValidationError, match="periodo"):
+        ReciboSueldo(empleador="X S.A.", empleado="PÉREZ, JUAN", periodo=periodo)
+
+
+def test_recibo_monto_con_mas_de_dos_decimales_rechazado():
+    with pytest.raises(ValidationError, match="neto"):
+        ReciboSueldo(empleador="X S.A.", empleado="PÉREZ, JUAN", neto=Decimal("100.001"))
+
+
+def test_recibo_todo_dato_tiene_su_evidencia():
+    datos = {n for n in ReciboSueldo.model_fields if not n.endswith("_evidencia")}
+    evidencias = {
+        n.removesuffix("_evidencia") for n in ReciboSueldo.model_fields if n.endswith("_evidencia")
     }
     assert datos == evidencias

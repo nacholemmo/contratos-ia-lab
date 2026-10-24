@@ -219,3 +219,14 @@ Plantilla para cada entrada (copiar y completar):
   - DNI vencido: hoy todos están vigentes a la firma. Si sirve como advertencia para Avisa, sumarlo como caso difícil del legajo (`DNI_VENCIDO`).
   - Fase 4: el cruce de nombres necesita el comparador de texto normalizado (mayúsculas, tildes, orden nombre/apellido).
   - `EDAD_ULTIMA_ACTUALIZACION` y `VIGENCIA_DNI_ANIOS` salen de las reglas generales del DNI; verificarlas en una fuente oficial (casos de mayores de 75 o DNI anteriores a la tarjeta).
+
+### 2026-10-24 — Fase 1, paso 5b: recibo de sueldo del inquilino
+- **Qué construí (lo escribió Claude, a pedido mío):** `ReciboSueldo` en core: solo empleador y empleado obligatorios; CUIT del empleador y CUIL del empleado con dígito verificador; período `AAAA-MM`; fecha de ingreso; bruto, total de descuentos y neto como `Monto`. Sin CBU, banco, legajo, categoría ni detalle de conceptos (minimización). `cuit_empresa` (prefijo 30, o 33 si el verificador daría 10). `recibo.py`: un recibo por inquilino, empleadores inventados, aportes fijos (jubilación 11 %, Ley 19.032 3 %, obra social 3 %) redondeados al centavo, neto exactamente bruto - aportes, alquiler entre el 20 % y el 40 % del neto, período del mes anterior a la firma, ingreso desde los 16 años y al menos 3 meses antes del período, con la misma fecha de nacimiento que la ficha del DNI. En `dni.py`: `sumar_anios` público, `fuente_dni` y `referencia_legajo` para que otros documentos del legajo recalculen los datos del DNI. Verificado: `uv run pytest packages/core packages/synthetic` → 2843 passed.
+- **Qué aprendí:**
+  - El modelo guarda bruto, descuentos y neto aunque el neto se pueda calcular: se extrae lo que el papel dice, no lo que debería decir. Un neto que no cierra es una advertencia (paso 3.4); si el modelo lo calculara, el error quedaría escondido.
+  - Dinero con código determinístico también en el generador: `Decimal`, `quantize` con `ROUND_HALF_UP` y el neto como resta exacta.
+  - El legajo ya tiene tres cruces evaluables: DNI ↔ contrato (nombre y número), recibo ↔ contrato (CUIL) y DNI ↔ recibo (edad e ingreso). Ninguno se puede verificar con un documento solo.
+- **Dudas abiertas:**
+  - Un recibo por inquilino; las inmobiliarias suelen pedir los últimos tres. Sumarlos si un eval los necesita.
+  - Contratos en dólares: el recibo usa un alquiler típico en pesos del año en vez de una cotización. Revisarlo si Avisa evalúa la relación alquiler/ingreso en USD.
+  - Garantes: en la realidad también presentan recibos. Hoy solo los inquilinos; revisarlo en 5c.
