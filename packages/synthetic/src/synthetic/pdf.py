@@ -38,7 +38,7 @@ TAMANIO_LETRA = 11
 
 
 class ContratoPDF(FPDF):
-    """A4 con la marca de agua y el aviso de sintético en cada página."""
+    """A4 con la marca de agua y el aviso de sintético en cada página (también para el legajo)."""
 
     def header(self) -> None:
         # Marca de agua primero: queda debajo del texto y no se mezcla con él al extraerlo.
@@ -104,10 +104,10 @@ def _write_firmas(pdf: FPDF) -> None:
     pdf.cell(85, ALTO_LINEA, "LA PARTE LOCATARIA", align="C", new_x=XPos.LMARGIN)
 
 
-def _marcar_sintetico(pdf: FPDF) -> None:
+def marcar_sintetico(pdf: FPDF, titulo: str = "Contrato de locación") -> None:
     """Metadatos que marcan el PDF como sintético, con fecha fija (mismos bytes por semilla)."""
     pdf.set_creation_date(FECHA_PDF)
-    pdf.set_title(f"Contrato de locación ({MARCA})")
+    pdf.set_title(f"{titulo} ({MARCA})")
     pdf.set_subject(AVISO)
     pdf.set_keywords("sintetico")
     pdf.set_creator("contratos-ia-lab/synthetic")
@@ -116,7 +116,7 @@ def _marcar_sintetico(pdf: FPDF) -> None:
 def render_pdf(clauses: list[Clause]) -> tuple[bytes, dict[str, int]]:
     """PDF del contrato y la página de cada cláusula (nombre → página)."""
     pdf = ContratoPDF(format="A4")
-    _marcar_sintetico(pdf)
+    marcar_sintetico(pdf)
     pdf.set_margins(20, 15, 20)
     pdf.set_auto_page_break(auto=True, margin=25)
     pdf.add_page()
@@ -136,7 +136,7 @@ def pdf_de_imagenes(paginas: list[Image.Image]) -> bytes:
     La marca "SINTÉTICO" ya está dibujada en cada imagen; los metadatos también la llevan.
     """
     pdf = FPDF(format="A4")
-    _marcar_sintetico(pdf)
+    marcar_sintetico(pdf)
     pdf.set_auto_page_break(auto=False)
     # JPEG, como guarda un escáner: más liviano y con sus propios artefactos de compresión.
     pdf.set_image_filter("DCTDecode")

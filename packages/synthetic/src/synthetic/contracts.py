@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
+from uuid import UUID
 
 from core.models import (
     Contrato,
@@ -12,6 +13,7 @@ from core.models import (
     Propiedad,
     RegimenLegal,
     Rol,
+    Sexo,
     TipoPropiedad,
 )
 from synthetic.identity import cuit_from_dni, generate_dni
@@ -54,16 +56,41 @@ PESOS_PROVINCIA: dict[str, float] = {
 P_CON_CUIT = 0.6
 
 
-def generate_persona(source: Source, rol: Rol) -> Persona:
-    """Persona física con DNI y, a veces, CUIL derivado de ese DNI."""
-    sexo = source.rng.choice(("M", "F"))
+@dataclass(frozen=True)
+class Identidad:
+    """Persona del contrato más los datos que el contrato no muestra y el DNI sí.
+
+    `Persona` es lo que el LLM extrae (nombre completo en un campo, sin sexo). El DNI separa
+    nombre y apellido y trae el sexo; no se pueden deducir después, porque hay nombres de
+    pila con espacio ("Juan Ignacio") y nombres de los dos sexos ("Guadalupe").
+    """
+
+    persona: Persona
+    nombre_pila: str
+    apellido: str
+    sexo: Sexo
+
+
+def generate_identidad(source: Source, rol: Rol) -> Identidad:
+    """Persona física con DNI y, a veces, CUIL derivado de ese DNI, con su nombre por partes."""
+    sexo = source.rng.choice((Sexo.M, Sexo.F))
     # name_male()/name_female() fallan en es_AR (Faker 40.43): armamos el nombre por partes.
-    nombre_pila = source.fake.first_name_male() if sexo == "M" else source.fake.first_name_female()
-    nombre = f"{nombre_pila} {source.fake.last_name()}"
+    nombre_pila = (
+        source.fake.first_name_male() if sexo == Sexo.M else source.fake.first_name_female()
+    )
+    apellido = source.fake.last_name()
 
     dni = generate_dni(source.rng)
     cuit = cuit_from_dni(dni, sexo) if source.rng.random() < P_CON_CUIT else None
-    return Persona(id=source.uuid(), nombre=nombre, rol=rol, dni=dni, cuit=cuit)
+    persona = Persona(
+        id=source.uuid(), nombre=f"{nombre_pila} {apellido}", rol=rol, dni=dni, cuit=cuit
+    )
+    return Identidad(persona=persona, nombre_pila=nombre_pila, apellido=apellido, sexo=sexo)
+
+
+def generate_persona(source: Source, rol: Rol) -> Persona:
+    """Persona física con DNI y, a veces, CUIL derivado de ese DNI."""
+    return generate_identidad(source, rol).persona
 
 
 def generate_propiedad(source: Source) -> Propiedad:
@@ -190,6 +217,11 @@ def _monto_inicial(source: Source, moneda: Moneda, fecha_firma: date) -> Decimal
 
 def generate_contrato(seed: int) -> Contrato:
     """Contrato completo y coherente a partir de una semilla (misma semilla → mismo contrato)."""
+    return generate_contrato_con_identidades(seed)[0]
+
+
+def generate_contrato_con_identidades(seed: int) -> tuple[Contrato, dict[UUID, Identidad]]:
+    """El contrato de la semilla y la identidad de cada parte (por `Persona.id`), para el legajo."""
     source = Source(seed)
 
     dias = (FIRMA_HASTA - FIRMA_DESDE).days
@@ -205,11 +237,16 @@ def generate_contrato(seed: int) -> Contrato:
     terms = choose_terms(source, regimen)
     monto = _monto_inicial(source, terms.moneda, fecha_firma)
 
-    partes = [generate_persona(source, Rol.PROPIETARIO)]
-    partes += [generate_persona(source, Rol.INQUILINO) for _ in range(source.rng.randint(1, 2))]
-    partes += [generate_persona(source, Rol.GARANTE) for _ in range(source.rng.randint(0, 2))]
+    identidades = [generate_identidad(source, Rol.PROPIETARIO)]
+    identidades += [
+        generate_identidad(source, Rol.INQUILINO) for _ in range(source.rng.randint(1, 2))
+    ]
+    identidades += [
+        generate_identidad(source, Rol.GARANTE) for _ in range(source.rng.randint(0, 2))
+    ]
+    partes = [i.persona for i in identidades]
 
-    return Contrato(
+    contrato = Contrato(
         id=source.uuid(),
         partes=partes,
         propiedad=generate_propiedad(source),
@@ -224,3 +261,4 @@ def generate_contrato(seed: int) -> Contrato:
         deposito=monto if source.rng.random() < P_CON_DEPOSITO else None,
         regimen_legal=regimen,
     )
+    return contrato, {i.persona.id: i for i in identidades}

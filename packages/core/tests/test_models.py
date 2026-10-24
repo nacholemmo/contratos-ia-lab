@@ -7,7 +7,17 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from core.models import Contrato, Evidencia, Indice, Moneda, Persona, RegimenLegal, Rol
+from core.models import (
+    DNI,
+    Contrato,
+    Evidencia,
+    Indice,
+    Moneda,
+    Persona,
+    RegimenLegal,
+    Rol,
+    Sexo,
+)
 
 # CUIT sintéticos con dígito verificador correcto (calculado con módulo 11).
 CUIT_VALIDO_PROPIETARIO = "20301234563"
@@ -89,3 +99,53 @@ def test_personas_distintas_tienen_ids_distintos() -> None:
     b = Persona(nombre="Ana Pérez", rol=Rol.PROPIETARIO)
 
     assert a.id != b.id
+
+
+# --- DNI ---
+
+
+def test_dni_minimo_con_numero_y_apellido():
+    # El resto puede no leerse en una foto mala: queda en null y no se inventa.
+    dni = DNI(numero="30123456", apellido="PÉREZ")
+    assert dni.nombre is None
+    assert dni.sexo is None
+    assert dni.fecha_vencimiento is None
+
+
+def test_dni_solo_numero_y_apellido_son_obligatorios():
+    requeridos = set(DNI.model_json_schema()["required"])
+    assert requeridos == {"numero", "apellido"}
+
+
+def test_dni_completo_valido():
+    dni = DNI(
+        numero="30123456",
+        apellido="PÉREZ",
+        nombre="JUAN IGNACIO",
+        sexo=Sexo.M,
+        fecha_nacimiento=date(1983, 5, 12),
+        fecha_emision=date(2015, 3, 1),
+        fecha_vencimiento=date(2030, 3, 1),
+        nacionalidad="ARGENTINA",
+        numero_evidencia=Evidencia(texto="30.123.456", pagina=1),
+    )
+    assert dni.sexo == "M"
+
+
+@pytest.mark.parametrize("numero", ["30.123.456", "123456", "301234567", "3012345a"])
+def test_dni_numero_con_formato_invalido_rechazado(numero):
+    with pytest.raises(ValidationError, match="numero"):
+        DNI(numero=numero, apellido="PÉREZ")
+
+
+def test_dni_sexo_fuera_del_enum_rechazado():
+    with pytest.raises(ValidationError, match="sexo"):
+        DNI(numero="30123456", apellido="PÉREZ", sexo="Masculino")
+
+
+def test_dni_todo_dato_tiene_su_evidencia():
+    datos = {n for n in DNI.model_fields if not n.endswith("_evidencia")}
+    evidencias = {
+        n.removesuffix("_evidencia") for n in DNI.model_fields if n.endswith("_evidencia")
+    }
+    assert datos == evidencias

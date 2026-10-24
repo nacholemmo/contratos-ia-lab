@@ -11,6 +11,7 @@ from synthetic.contracts import (
     PESOS_PROVINCIA,
     choose_terms,
     generate_contrato,
+    generate_contrato_con_identidades,
     generate_persona,
     generate_propiedad,
     regimen_por_fecha,
@@ -183,3 +184,38 @@ def test_dnu_distribucion_representativa():
     assert indices.most_common(1)[0][0] == Indice.IPC
     usd = sum(t.moneda == Moneda.USD for t in terms) / len(terms)
     assert 0.10 < usd < 0.20
+
+
+# --- Identidad: lo que el DNI muestra y el contrato no ---
+
+
+@pytest.mark.parametrize("seed", range(100))
+def test_identidades_coinciden_con_las_partes(seed):
+    contrato, identidades = generate_contrato_con_identidades(seed)
+    assert contrato == generate_contrato(seed)
+    assert set(identidades) == {p.id for p in contrato.partes}
+    for persona in contrato.partes:
+        identidad = identidades[persona.id]
+        assert identidad.persona == persona
+        assert f"{identidad.nombre_pila} {identidad.apellido}" == persona.nombre
+
+
+@pytest.mark.parametrize("seed", range(100))
+def test_sexo_coherente_con_el_cuil(seed):
+    _, identidades = generate_contrato_con_identidades(seed)
+    for identidad in identidades.values():
+        prefijo = (identidad.persona.cuit or "")[:2]
+        # El 23 es el caso especial (dígito verificador 10): no dice el sexo.
+        if prefijo in ("20", "27"):
+            assert prefijo == ("20" if identidad.sexo == "M" else "27")
+
+
+def test_hay_nombres_de_pila_compuestos():
+    # Por eso el nombre se guarda por partes: cortar por el primer espacio fallaría.
+    compuestos = [
+        i.nombre_pila
+        for seed in range(200)
+        for i in generate_contrato_con_identidades(seed)[1].values()
+        if " " in i.nombre_pila
+    ]
+    assert compuestos

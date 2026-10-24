@@ -1,17 +1,17 @@
 """Documentos de identidad sintéticos: DNI y CUIT/CUIL válidos y coherentes entre sí."""
 
 import random
-from typing import Literal
 
-from core.models import PESOS_CUIT  # noqa: F401  (para calcular el dígito verificador)
-
-# Sexo registral: decide el prefijo del CUIL de una persona física.
-Sexo = Literal["M", "F"]
+from core.models import (
+    PESOS_CUIT,  # noqa: F401  (para calcular el dígito verificador)
+    Sexo,
+)
 
 # Rango de DNI de personas adultas: los de 7 dígitos (< 10 millones) son de gente mayor.
 DNI_MIN = 5_000_000
 DNI_MAX = 45_999_999
-PREFIJO_POR_SEXO: dict[str, str] = {"M": "20", "F": "27"}
+# Prefijo del CUIL según el sexo registral. El generador no produce DNI no binarios (X).
+PREFIJO_POR_SEXO: dict[Sexo, str] = {Sexo.M: "20", Sexo.F: "27"}
 
 
 def generate_dni(rng: random.Random) -> str:

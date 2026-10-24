@@ -192,6 +192,69 @@ class Contrato(BaseModel):
     fecha_firma_evidencia: Evidencia | None = None
 
 
+class Sexo(StrEnum):
+    """Sexo tal como figura en el DNI."""
+
+    M = "M"
+    F = "F"
+    X = "X"  # DNI no binario (Decreto 476/2021).
+
+
+class DNI(BaseModel):
+    """Datos del DNI argentino (frente y dorso), tal como figuran en el documento.
+
+    Sin foto, firma, código de barras ni número de trámite: el servicio no los necesita y
+    son los datos más sensibles (minimización, Ley 25.326). Solo número y apellido son
+    obligatorios, porque sin ellos no es un DNI; el resto puede no leerse (foto mala, dorso
+    que no vino) y queda en null en vez de inventarse. Cada dato lleva al lado su campo
+    `<dato>_evidencia`, como en `Contrato`.
+    """
+
+    numero: str = Field(
+        ...,
+        pattern=r"^\d{7,8}$",
+        description="Número de documento de 7 u 8 dígitos, sin puntos (ej. 30123456)",
+    )
+    apellido: str = Field(
+        ...,
+        min_length=1,
+        description="Apellido o apellidos tal como figuran en el DNI, sin el nombre",
+    )
+    nombre: str | None = Field(
+        None,
+        min_length=1,
+        description=(
+            "Nombre o nombres de pila, sin el apellido (ej. 'Juan Ignacio'); null si no figura"
+        ),
+    )
+    sexo: Sexo | None = Field(None, description="Sexo: M, F o X; null si no figura")
+    fecha_nacimiento: date | None = Field(
+        None, description="Fecha de nacimiento, AAAA-MM-DD; null si no figura"
+    )
+    fecha_emision: date | None = Field(
+        None, description="Fecha de emisión, AAAA-MM-DD; null si no figura"
+    )
+    fecha_vencimiento: date | None = Field(
+        None, description="Fecha de vencimiento, AAAA-MM-DD; null si no figura"
+    )
+    nacionalidad: str | None = Field(
+        None, description="Nacionalidad tal como figura (ej. 'ARGENTINA'); null si no figura"
+    )
+    domicilio: str | None = Field(
+        None, description="Domicilio del dorso, tal como figura; null si no figura"
+    )
+
+    numero_evidencia: Evidencia | None = None
+    apellido_evidencia: Evidencia | None = None
+    nombre_evidencia: Evidencia | None = None
+    sexo_evidencia: Evidencia | None = None
+    fecha_nacimiento_evidencia: Evidencia | None = None
+    fecha_emision_evidencia: Evidencia | None = None
+    fecha_vencimiento_evidencia: Evidencia | None = None
+    nacionalidad_evidencia: Evidencia | None = None
+    domicilio_evidencia: Evidencia | None = None
+
+
 class TipoDocumento(StrEnum):
     """Tipo de archivo que entra al sistema; lo decide el clasificador de la Fase 3."""
 
@@ -222,6 +285,7 @@ class Documento(BaseModel):
 
 
 __all__ = [
+    "DNI",
     "Contrato",
     "Documento",
     "Evidencia",
@@ -232,6 +296,7 @@ __all__ = [
     "Propiedad",
     "RegimenLegal",
     "Rol",
+    "Sexo",
     "TipoDocumento",
     "TipoPropiedad",
     "cuit_valido",

@@ -89,7 +89,15 @@ Pasos:
    - 4c. Escaneo torcido: páginas como imagen, con rotación, ruido y aspecto de
      fotocopia, sin capa de texto.
 5. Documentos complementarios simples: DNI, recibo de sueldo, garantía y seguro. Sus
-   modelos pydantic se agregan a core.
+   modelos pydantic se agregan a core, con evidencia por campo gemelo (como `Contrato`).
+   Se generan como un legajo coherente con el contrato de la misma semilla, para poder
+   evaluar cruces (¿el DNI coincide con el del contrato?). Sin imitar el diseño de
+   documentos oficiales: mismos datos, presentación propia y marca SINTÉTICO. En tres subpasos:
+   - 5a. Modelo `DNI` y ficha de una página por cada parte del contrato.
+   - 5b. Recibo de sueldo del inquilino: empleador inventado con CUIT válido, período,
+     bruto, descuentos y neto coherentes con el alquiler.
+   - 5c. Garantía (título del garante o póliza de caución, según el caso de 4b) y seguro
+     del inmueble, con vigencia coherente con el plazo.
 6. CLI: `uv run --package synthetic generate --n 50 --seed 42 --out data/synthetic/`,
    que escribe cada PDF con su JSON de ground truth.
 Terminado cuando: hay 50 contratos y sus complementarios con su JSON; un test verifica
