@@ -15,7 +15,7 @@ from uuid import UUID
 from core.models import DNI, Evidencia, Sexo
 from synthetic import fichas
 from synthetic.cases import CasoDificil
-from synthetic.contracts import LOCALIDADES, Identidad
+from synthetic.contracts import LOCALIDADES, PESOS_PROVINCIA, Identidad
 from synthetic.legajo import ContextoLegajo, contexto_legajo
 from synthetic.source import Source
 
@@ -29,6 +29,9 @@ EDAD_ULTIMA_ACTUALIZACION = 14
 # Edad de las partes a la fecha de firma: mayores de edad y un tope razonable.
 EDAD_MIN = 18
 EDAD_MAX = 80
+
+# Probabilidad de que una parte viva en la provincia del inmueble que alquila.
+P_MISMA_PROVINCIA = 0.85
 
 # Meses abreviados en mayúsculas, como se imprimen en el DNI ("12 MAR 1985").
 MESES_DNI = ("ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC")
@@ -90,15 +93,22 @@ def fechas_dni(source: Source, fecha_referencia: date) -> tuple[date, date, date
     return nacimiento, emision, vencimiento
 
 
-def _domicilio(source: Source) -> str:
-    # Mayúsculas, como en el dorso del DNI. Cualquier localidad: no tiene por qué ser la del
-    # inmueble (el inquilino todavía vive en otro lado).
-    localidad, provincia, _ = source.rng.choice(LOCALIDADES)
+def _domicilio(source: Source, provincia_inmueble: str) -> str:
+    """Domicilio del dorso, en mayúsculas. Casi siempre en la provincia del inmueble (quien
+    alquila en Godoy Cruz ya vive en el Gran Mendoza); si no, según PESOS_PROVINCIA. No es
+    la dirección del inmueble: el inquilino todavía vive en otro lado."""
+    if source.rng.random() < P_MISMA_PROVINCIA:
+        provincia = provincia_inmueble
+    else:
+        provincia = source.rng.choices(list(PESOS_PROVINCIA), weights=list(PESOS_PROVINCIA.values()))[0]
+    localidad, provincia, _ = source.rng.choice([f for f in LOCALIDADES if f[1] == provincia])
     calle = f"{source.fake.street_name()} {source.fake.building_number()}"
     return f"{calle} - {localidad} - {provincia}".upper()
 
 
-def generate_dni_data(identidad: Identidad, fecha_referencia: date, source: Source) -> DNI:
+def generate_dni_data(
+    identidad: Identidad, fecha_referencia: date, source: Source, provincia_inmueble: str
+) -> DNI:
     """Datos del DNI de una parte del contrato, sin evidencia (la pone `render_ficha`)."""
     persona = identidad.persona
     if persona.dni is None:
@@ -113,7 +123,7 @@ def generate_dni_data(identidad: Identidad, fecha_referencia: date, source: Sour
         fecha_emision=emision,
         fecha_vencimiento=vencimiento,
         nacionalidad=NACIONALIDAD,
-        domicilio=_domicilio(source),
+        domicilio=_domicilio(source, provincia_inmueble),
     )
 
 
@@ -151,10 +161,10 @@ def render_ficha(dni: DNI, source: Source) -> tuple[bytes, dict[str, str]]:
 
 
 def generate_dni_doc(
-    identidad: Identidad, fecha_referencia: date, source: Source
+    identidad: Identidad, fecha_referencia: date, source: Source, provincia_inmueble: str
 ) -> tuple[bytes, DNI]:
     """PDF de la ficha y su ground truth con evidencia (todo en la página 1)."""
-    dni = generate_dni_data(identidad, fecha_referencia, source)
+    dni = generate_dni_data(identidad, fecha_referencia, source, provincia_inmueble)
     pdf, valores = render_ficha(dni, source)
     update = {f"{c}_evidencia": Evidencia(texto=v, pagina=1) for c, v in valores.items()}
     return pdf, dni.model_copy(update=update)
@@ -168,8 +178,12 @@ def fuente_dni(seed: int, persona_id: UUID) -> Source:
 def dni_de(contexto: ContextoLegajo, persona_id: UUID) -> DNI:
     """Datos del DNI de una parte, sin renderizar la ficha: para otros documentos del legajo
     que los necesitan (ej. la fecha de nacimiento en el recibo o en el título)."""
-    identidad = contexto.identidades[persona_id]
-    return generate_dni_data(identidad, contexto.referencia, fuente_dni(contexto.seed, persona_id))
+    return generate_dni_data(
+        contexto.identidades[persona_id],
+        contexto.referencia,
+        fuente_dni(contexto.seed, persona_id),
+        contexto.limpio.propiedad.provincia,
+    )
 
 
 def generate_dnis(
@@ -185,7 +199,10 @@ def generate_dnis(
     contexto = contexto_legajo(seed, casos)
     return {
         p.id: generate_dni_doc(
-            contexto.identidades[p.id], contexto.referencia, fuente_dni(seed, p.id)
+            contexto.identidades[p.id],
+            contexto.referencia,
+            fuente_dni(seed, p.id),
+            contexto.limpio.propiedad.provincia,
         )
         for p in contexto.partes()
     }

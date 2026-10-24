@@ -116,6 +116,19 @@ def generate_propiedad(source: Source) -> Propiedad:
 FIRMA_DESDE = date(2020, 7, 1)
 FIRMA_HASTA = date(2026, 9, 30)
 
+# Año de firma: el set se parece a los contratos que Avisa va a recibir, que son los
+# vigentes hoy. Uno de la Ley 27.551 firmado en 2021 (36 meses) ya venció; quedan pocos
+# de leyes viejas (prórrogas, el histórico de una inmobiliaria). Aproximado.
+PESOS_ANIO_FIRMA: dict[int, float] = {
+    2020: 0.01,
+    2021: 0.02,
+    2022: 0.02,
+    2023: 0.10,
+    2024: 0.25,
+    2025: 0.35,
+    2026: 0.25,
+}
+
 # Entrada en vigencia de cada régimen (fechas de firma desde las que aplica).
 VIGENCIA_27737 = date(2023, 10, 17)
 VIGENCIA_DNU_70 = date(2023, 12, 29)
@@ -215,6 +228,14 @@ def _monto_inicial(source: Source, moneda: Moneda, fecha_firma: date) -> Decimal
     return Decimal(source.rng.randrange(minimo, maximo + 1, 1_000))
 
 
+def _fecha_firma(source: Source) -> date:
+    """Año según PESOS_ANIO_FIRMA y un día al azar de ese año, dentro de la ventana de firma."""
+    anio = _elegir(source, PESOS_ANIO_FIRMA)
+    desde = max(FIRMA_DESDE, date(anio, 1, 1))
+    hasta = min(FIRMA_HASTA, date(anio, 12, 31))
+    return desde + timedelta(days=source.rng.randint(0, (hasta - desde).days))
+
+
 def generate_contrato(seed: int) -> Contrato:
     """Contrato completo y coherente a partir de una semilla (misma semilla → mismo contrato)."""
     return generate_contrato_con_identidades(seed)[0]
@@ -224,8 +245,7 @@ def generate_contrato_con_identidades(seed: int) -> tuple[Contrato, dict[UUID, I
     """El contrato de la semilla y la identidad de cada parte (por `Persona.id`), para el legajo."""
     source = Source(seed)
 
-    dias = (FIRMA_HASTA - FIRMA_DESDE).days
-    fecha_firma = FIRMA_DESDE + timedelta(days=source.rng.randint(0, dias))
+    fecha_firma = _fecha_firma(source)
     # Normalmente arranca el día 1 de uno de los dos meses siguientes a la firma.
     mes_siguiente = (fecha_firma.replace(day=1) + timedelta(days=32)).replace(day=1)
     if source.rng.random() < 0.5:

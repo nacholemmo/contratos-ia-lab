@@ -11,6 +11,7 @@ from synthetic.dni import (
     EDAD_MAX,
     EDAD_MIN,
     EDAD_ULTIMA_ACTUALIZACION,
+    P_MISMA_PROVINCIA,
     VIGENCIA_DNI_ANIOS,
     fechas_dni,
     generate_dnis,
@@ -161,3 +162,18 @@ def test_con_caucion_no_hay_dni_de_garantes():
     garantes = {p.id for p in generate_contrato(seed).partes if p.rol == Rol.GARANTE}
     assert garantes
     assert not garantes & set(dnis)
+
+
+def test_domicilio_casi_siempre_en_la_provincia_del_inmueble():
+    misma = total = mendoza = 0
+    for seed in range(150):
+        provincia = generate_contrato(seed).propiedad.provincia.upper()
+        for _, dni in generate_dnis(seed).values():
+            provincia_dni = dni.domicilio.rsplit(" - ", 1)[-1]
+            misma += provincia_dni == provincia
+            mendoza += provincia_dni == "MENDOZA"
+            total += 1
+    # Al menos P_MISMA_PROVINCIA (el resto también puede caer en la misma, por los pesos).
+    assert P_MISMA_PROVINCIA - 0.05 <= misma / total <= 0.97
+    # Y así los legajos quedan mayormente en Mendoza, como los inmuebles.
+    assert mendoza / total > 0.6

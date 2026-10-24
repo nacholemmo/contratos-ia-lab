@@ -253,3 +253,14 @@ Plantilla para cada entrada (copiar y completar):
 - **Dudas abiertas:**
   - La CLI no borra lo que ya hay en la carpeta: la fuente de verdad es `legajo.json`, no los archivos presentes. Si cambia el código y una semilla deja de tener un documento, el viejo queda.
   - `documentos_por_modelo` del manifest cuenta solo el set sorteado; si hace falta, sumar el del forzado.
+
+### 2026-10-24 — Ajuste de la Fase 1: contratos vigentes y legajos de Mendoza
+- **Qué construí (Claude, a pedido mío):** `PESOS_ANIO_FIRMA` en `contracts.py` (2020 1 %, 2021-2022 2 %, 2023 10 %, 2024 25 %, 2025 35 %, 2026 25 %): la firma se elige en dos etapas, año por peso y un día de ese año dentro de la ventana. En `dni.py`, el domicilio sigue al inmueble: el 85 % vive en la misma provincia (`P_MISMA_PROVINCIA`) y el resto según `PESOS_PROVINCIA`. Tests de las dos proporciones. Set regenerado desde cero (`rm -rf data/synthetic`): de 50 contratos, 38 firmados entre 2024 y 2026 y 38 bajo el DNU; domicilios del DNI en Mendoza, del 35 % al 75 %; neto mediano de los recibos de 2025-2026 entre $ 2,8 y $ 3,1 millones.
+- **Qué aprendí:**
+  - Los montos "bajos" de los recibos eran coherentes con la fecha de firma (un recibo de 2020 trae un sueldo de 2020). El problema era la distribución: la firma uniforme desde 2020 daba un 68 % de contratos de 2020-2023, casi todos ya vencidos. El set tiene que parecerse a lo que Avisa recibe: contratos **vigentes**.
+  - No afecta la extracción (el LLM lee el monto impreso), pero sí que la métrica sea representativa y cualquier validación con umbrales absolutos.
+  - Muestrear uniforme es el default cómodo, y casi nunca la distribución del mundo. La pregunta es "¿uniforme sobre qué población?".
+  - Un cambio "local" (el año de firma) mueve casi todas las proporciones del set (régimen, moneda, casos aplicables): hay que volver a leer el manifest.
+- **Dudas abiertas:**
+  - Los pesos por año son aproximados; ajustarlos con los contratos reales de las inmobiliarias (docs/validacion.md).
+  - `ALQUILER_ARS_POR_ANIO` es nacional; en Mendoza los alquileres son más bajos que en CABA. Revisarlo con datos reales.

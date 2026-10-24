@@ -8,6 +8,7 @@ from synthetic.contracts import (
     FIRMA_DESDE,
     FIRMA_HASTA,
     LOCALIDADES,
+    PESOS_ANIO_FIRMA,
     PESOS_PROVINCIA,
     choose_terms,
     generate_contrato,
@@ -219,3 +220,19 @@ def test_hay_nombres_de_pila_compuestos():
         if " " in i.nombre_pila
     ]
     assert compuestos
+
+
+# --- Año de firma: contratos vigentes, como los que recibe Avisa ---
+
+
+def test_pesos_anio_firma_cubren_la_ventana_y_suman_uno():
+    assert set(PESOS_ANIO_FIRMA) == set(range(FIRMA_DESDE.year, FIRMA_HASTA.year + 1))
+    assert sum(PESOS_ANIO_FIRMA.values()) == pytest.approx(1)
+
+
+def test_mayoria_de_contratos_recientes():
+    anios = Counter(generate_contrato(seed).fecha_firma.year for seed in range(2000))
+    recientes = sum(anios[a] for a in (2024, 2025, 2026)) / 2000
+    # Pesos 2024-2026: 85 %. Los de leyes viejas (2020-2022) siguen apareciendo, pocos.
+    assert 0.80 <= recientes <= 0.90
+    assert all(anios[a] > 0 for a in PESOS_ANIO_FIRMA)
