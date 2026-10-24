@@ -155,9 +155,7 @@ def test_persona_sin_documento_en_el_contrato_lo_tiene_en_su_dni():
 
 def test_con_caucion_no_hay_dni_de_garantes():
     # Con el caso, el contrato no tiene garantes: el legajo tampoco trae sus DNI.
-    seed = next(
-        s for s in SEEDS if any(p.rol == Rol.GARANTE for p in generate_contrato(s).partes)
-    )
+    seed = next(s for s in SEEDS if any(p.rol == Rol.GARANTE for p in generate_contrato(s).partes))
     dnis = generate_dnis(seed, casos=[CasoDificil.SEGURO_DE_CAUCION])
     garantes = {p.id for p in generate_contrato(seed).partes if p.rol == Rol.GARANTE}
     assert garantes

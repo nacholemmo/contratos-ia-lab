@@ -83,6 +83,7 @@ class Manifest(BaseModel):
         default_factory=dict, description="Semillas del set forzado de cada caso"
     )
 
+
 # Cuántas semillas revisar buscando una donde el caso aplique, antes de rendirse.
 MAX_BUSQUEDA = 10_000
 
@@ -95,9 +96,7 @@ def carpeta_forzado(out: Path, caso: CasoDificil) -> Path:
     return out / "forzados" / caso
 
 
-def write_legajo(
-    seed: int, out: Path, casos: list[CasoDificil] | None = None
-) -> IndiceLegajo:
+def write_legajo(seed: int, out: Path, casos: list[CasoDificil] | None = None) -> IndiceLegajo:
     """Escribe el contrato y su legajo en `out/<seed>/` y devuelve su índice.
 
     Sin `casos`, la semilla elige los suyos; con `casos`, se fuerzan (ver `generate_sample`).

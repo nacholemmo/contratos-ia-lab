@@ -48,6 +48,7 @@ ETIQUETAS = {
     "domicilio": "Domicilio",
 }
 
+
 def sumar_anios(d: date, anios: int) -> date:
     """`d` corrida `anios` años (negativo: hacia atrás).
 
@@ -100,7 +101,8 @@ def _domicilio(source: Source, provincia_inmueble: str) -> str:
     if source.rng.random() < P_MISMA_PROVINCIA:
         provincia = provincia_inmueble
     else:
-        provincia = source.rng.choices(list(PESOS_PROVINCIA), weights=list(PESOS_PROVINCIA.values()))[0]
+        pesos = list(PESOS_PROVINCIA.values())
+        provincia = source.rng.choices(list(PESOS_PROVINCIA), weights=pesos)[0]
     localidad, provincia, _ = source.rng.choice([f for f in LOCALIDADES if f[1] == provincia])
     calle = f"{source.fake.street_name()} {source.fake.building_number()}"
     return f"{calle} - {localidad} - {provincia}".upper()

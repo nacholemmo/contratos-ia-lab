@@ -62,7 +62,7 @@ Pasos:
 6. ✅ Primeros tests: un Contrato válido; CUIT con dígito verificador inválido rechazado; dinero como Decimal.
 Terminado cuando: uv sync funciona en limpio, uv run pytest pasa y ruff no reporta errores.
 
-## Fase 1 — Generador sintético (packages/synthetic)
+## Fase 1 — Generador sintético (packages/synthetic) ✅
 Objetivo: `generate_contract(seed) -> (pdf, Contrato)` determinístico, con casos difíciles.
 Recursos: [Path] semana 1 (fundamentos de LLMs, para entender qué le va a costar al extractor).
 Conceptos: datos sintéticos, ground truth, semillas y reproducibilidad, variación controlada.

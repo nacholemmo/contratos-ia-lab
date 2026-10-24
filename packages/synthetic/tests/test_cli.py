@@ -61,12 +61,15 @@ def test_legajo_completo_y_coherente(salida):
         assert len(por_tipo[TipoDocumento.CONTRATO]) == 1
         assert len(por_tipo[TipoDocumento.SEGURO]) == 1
 
-        contrato = MODELOS["Muestra"].model_validate_json(
-            (carpeta / por_tipo[TipoDocumento.CONTRATO][0].datos).read_text()
-        ).contrato
-        assert indice.casos == MODELOS["Muestra"].model_validate_json(
-            (carpeta / "contrato.json").read_text()
-        ).casos
+        contrato = (
+            MODELOS["Muestra"]
+            .model_validate_json((carpeta / por_tipo[TipoDocumento.CONTRATO][0].datos).read_text())
+            .contrato
+        )
+        assert (
+            indice.casos
+            == MODELOS["Muestra"].model_validate_json((carpeta / "contrato.json").read_text()).casos
+        )
         # Un DNI por parte que firma y un recibo por inquilino, cada uno con su persona.
         assert {d.persona_id for d in por_tipo[TipoDocumento.DNI]} == {
             p.id for p in contrato.partes
