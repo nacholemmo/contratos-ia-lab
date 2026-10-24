@@ -19,6 +19,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "C4", "T20"]
 [tool.ruff.lint.per-file-ignores]
 # scripts/ son herramientas de consola: ahí print es la salida, no un log olvidado.
 "scripts/*" = ["T20"]
+"packages/*/src/*/cli.py" = ["T20"]
 
 # --- pytest: un tests/ por paquete ---
 [tool.pytest.ini_options]

@@ -98,7 +98,7 @@ Pasos:
      bruto, descuentos y neto coherentes con el alquiler.
    - 5c. Garantía (título del garante o póliza de caución, según el caso de 4b) y seguro
      del inmueble, con vigencia coherente con el plazo.
-6. CLI: `uv run --package synthetic generate --n 50 --seed 42 --out data/synthetic/`,
+6. ✅ CLI: `uv run --package synthetic generate --n 50 --seed 42 --out data/synthetic/`,
    que escribe cada PDF con su JSON de ground truth.
 Terminado cuando: hay 50 contratos y sus complementarios con su JSON; un test verifica
 que cada JSON valida contra su modelo y otro que la misma semilla produce el mismo

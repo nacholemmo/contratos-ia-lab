@@ -241,3 +241,15 @@ Plantilla para cada entrada (copiar y completar):
   - Título y póliza de caución son los dos `TipoDocumento.GARANTIA`: el extractor de la Fase 3 los tiene que distinguir (¿subtipo en la clasificación?).
   - El seguro es anual y el contrato dura más: las renovaciones (y el aviso de vencimiento) son de Avisa; acá solo la primera póliza.
   - Garantes con recibo de sueldo en vez de título (pasa en la realidad): no se generan.
+
+### 2026-10-24 — Fase 1, paso 6: CLI que escribe el set con su legajo
+- **Qué construí (lo escribió Claude, a pedido mío):** `export.py`: `write_legajo` escribe una carpeta por semilla (`0042/`) con el contrato y su legajo (PDF + JSON por documento, nombres por rol como `dni_inquilino_2`) y un `legajo.json` con el tipo, el modelo y el `persona_id` de cada documento; `MODELOS` (nombre → modelo pydantic); `write_manifest` con el resumen del set. `cli.py` con `argparse` y el script `generate` en `[project.scripts]` (ruff: T20 permitido en `cli.py`, como en `scripts/`). Al correrlo, el manifest mostró canon escalonado y caución con 0 contratos en 50 sorteados, así que se sumó un **set forzado**: `--por-caso N` (default 3) escribe `forzados/<caso>/<seed>/` con un solo caso por contrato, en semillas donde aplica y fuera del rango sorteado. Verificado: `uv run --package synthetic generate --n 50 --seed 42 --out data/synthetic/` → 50 contratos sorteados (27 limpios) y 3 forzados por cada uno de los 9 casos; tests de la CLI con los dos criterios de "Terminado cuando" (cada JSON valida contra su modelo, misma semilla → mismos bytes).
+- **Qué aprendí:**
+  - **Set representativo vs. set de cobertura:** el sorteado mide cómo le va al extractor en un día normal; el forzado garantiza un mínimo de cada caso raro. Con P_CASO × aplicabilidad ≈ 3 %, un caso puede salir 0 veces en 50, y la métrica global nunca se entera de que el extractor no lo sabe leer. Es el mismo problema de las clases raras en ML (estratificación).
+  - El `manifest` con todos los casos, incluidos los que dan 0, es lo que hizo visible el problema antes de la Fase 4.
+  - Un solo caso por contrato forzado: cada error se le puede atribuir a ese caso. Y como cada caso busca desde la misma semilla, el mismo contrato base aparece con distintos casos: una comparación controlada.
+  - `persona_id` va en el índice del legajo, no en los modelos de core: los modelos son lo que extrae el LLM, que no conoce los ids.
+  - `main(argv)` recibe los argumentos como parámetro: la CLI se testea llamando a una función, sin levantar un proceso.
+- **Dudas abiertas:**
+  - La CLI no borra lo que ya hay en la carpeta: la fuente de verdad es `legajo.json`, no los archivos presentes. Si cambia el código y una semilla deja de tener un documento, el viejo queda.
+  - `documentos_por_modelo` del manifest cuenta solo el set sorteado; si hace falta, sumar el del forzado.
