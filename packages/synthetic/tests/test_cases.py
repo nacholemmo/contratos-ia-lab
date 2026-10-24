@@ -93,6 +93,7 @@ SIEMPRE_APLICABLES = {
     CasoDificil.MONTOS_SOLO_LETRAS,
     CasoDificil.GUIONES_DE_RELLENO,
     CasoDificil.CLAUSULA_LARGA,
+    CasoDificil.ESCANEO_TORCIDO,
 }
 
 
@@ -167,7 +168,9 @@ def test_generate_contract_es_el_contrato_de_la_muestra():
 
 @pytest.mark.parametrize("seed", range(30))
 def test_todos_los_casos_juntos_con_evidencia_en_su_pagina(seed):
-    pdf, muestra = generate_sample(seed, casos=_aplicables(seed))
+    # Sin el escaneo, que no tiene texto que leer (su evidencia se prueba en test_scan.py).
+    casos = [c for c in _aplicables(seed) if c != CasoDificil.ESCANEO_TORCIDO]
+    pdf, muestra = generate_sample(seed, casos=casos)
     paginas = _texto(pdf)
     c = muestra.contrato
     evidencias = [getattr(c, f"{campo}_evidencia") for campo in CAMPOS_CON_EVIDENCIA]

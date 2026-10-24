@@ -189,3 +189,17 @@ Plantilla para cada entrada (copiar y completar):
   - Tipo de garantía (persona o caución): ya era candidato a campo para la Fase 3 y ahora el generador lo produce. Hoy solo se nota por la ausencia de garantes.
   - La evidencia de un dato *dentro* de una cláusula de más de una página quedaría con la última página. El inventario no tiene datos, así que no pasa; revisarlo si una cláusula larga llega a tener uno.
   - Para la Fase 4: set forzado por caso (N contratos con cada caso) además del sorteado.
+
+### 2026-10-24 — Fase 1, paso 4c: escaneo torcido (cierra el paso 4)
+- **Qué construí:** pypdfium2 5.14 y Pillow 13 en `synthetic` (Pillow ya venía con fpdf2, pero se declara porque la importamos directamente). Caso `ESCANEO_TORCIDO` al 5 % (set limpio ≈ 55 %). `scan.py`: `rasterizar` (cada página a una imagen en grises a 150 DPI) y `degradar` (torcida ±2°, gris de fotocopia, 4.000 puntos de ruido y desenfoque leve, todo con `source.rng`). La escribí con la solución que pedí, después de dos intentos. En `pdf.py`: `pdf_de_imagenes` arma un PDF A4 de imágenes JPEG sin capa de texto, y `_marcar_sintetico` junta los metadatos. El ground truth del escaneado es idéntico al de su gemelo con texto. Los tests que leen el texto del PDF ya no usan el escaneo. Verificado: `uv run pytest packages/synthetic` en verde (incluye los 18 de `test_scan.py`); `ruff check` y `ruff format` sin errores. Revisado a ojo en `data/escaneo.pdf`.
+- **Qué aprendí:**
+  - **Documento sin capa de texto:** un escaneo es solo una foto; no hay texto que extraer y hace falta visión u OCR, con otro costo, latencia y errores. Es lo que compara la Fase 2, paso 2.
+  - Escanear cambia la forma, no lo que dice: el ground truth es el mismo que el del gemelo con texto (misma semilla, sin el caso) y la evidencia se verifica en ese gemelo.
+  - Pillow: `rotate`, `point` y `filter` devuelven una imagen nueva (como `.map()` en JS), mientras que `ImageDraw` dibuja sobre la imagen que recibe.
+  - `point()` no corre una vez por píxel: llama a la función una vez por cada uno de los 256 tonos y arma una tabla (LUT) que aplica a toda la imagen. Sirve para el gris de fotocopia, no para ruido (cada punto necesita su propia posición y tono).
+  - `rotate(expand=True)` agranda la imagen, y sin `fillcolor` las esquinas quedan negras. `randint` da enteros y `uniform` decimales (ángulo y radio de desenfoque).
+  - `Image.effect_noise` usa el azar de C y no la semilla: rompería el determinismo. Todo el azar sigue pasando por `Source`, que ya llega sembrada (no hace falta volver a sembrarla).
+- **Dudas abiertas:**
+  - El escaneo es suave: un extractor con visión lo va a leer casi como el texto. Si en la Fase 4 la precisión del escaneo es casi igual a la del texto, sumar un nivel fuerte (más ángulo y ruido, contraste desparejo, como el modelo de Mendoza).
+  - Los bytes del escaneo dependen también de las versiones de pypdfium2, Pillow y su libjpeg fijadas en `uv.lock`.
+  - La suite tarda más porque rasteriza: si molesta, marcar los tests de escaneo como lentos (`pytest -m "not lento"`).

@@ -4,8 +4,9 @@ import pytest
 from pypdf import PdfReader
 
 from core.models import Contrato
+from synthetic.cases import CasoDificil
 from synthetic.contracts import generate_contrato
-from synthetic.pdf import AVISO, MARCA, generate_contract, generate_sample
+from synthetic.pdf import AVISO, MARCA, generate_contract, generate_sample, prepare_sample
 
 SEEDS = range(50)
 
@@ -23,6 +24,13 @@ def _paginas(pdf: bytes) -> list[str]:
     return [_normalizar(p.extract_text()) for p in PdfReader(BytesIO(pdf)).pages]
 
 
+def _con_texto(seed: int):
+    """Los casos sorteados de la semilla, salvo el escaneo: estos tests leen el texto del PDF."""
+    casos = [c for c in prepare_sample(seed)[0] if c != CasoDificil.ESCANEO_TORCIDO]
+    pdf, muestra = generate_sample(seed, casos)
+    return pdf, muestra.contrato
+
+
 def test_misma_semilla_mismo_pdf():
     for seed in range(5):
         assert generate_contract(seed) == generate_contract(seed)
@@ -34,7 +42,7 @@ def test_semillas_distintas_pdf_distinto():
 
 @pytest.mark.parametrize("seed", range(10))
 def test_marca_sintetico_en_cada_pagina(seed):
-    pdf, _ = generate_contract(seed)
+    pdf, _ = _con_texto(seed)
     for numero, texto in enumerate(_paginas(pdf), start=1):
         assert AVISO in texto, numero
         assert f"{MARCA} · Página {numero}" in texto, numero
@@ -43,7 +51,7 @@ def test_marca_sintetico_en_cada_pagina(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_evidencia_aparece_en_su_pagina(seed):
-    pdf, contrato = generate_contract(seed)
+    pdf, contrato = _con_texto(seed)
     paginas = _paginas(pdf)
     evidencias = [getattr(contrato, f"{c}_evidencia") for c in CAMPOS_CON_EVIDENCIA]
     for evidencia in [e for e in evidencias if e is not None] + contrato.clausulas:

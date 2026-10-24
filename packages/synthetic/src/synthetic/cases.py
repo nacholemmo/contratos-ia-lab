@@ -27,11 +27,13 @@ class CasoDificil(StrEnum):
     CANON_ESCALONADO = "canon_escalonado"  # monto de cada año fijado de antemano, sin índice
     SEGURO_DE_CAUCION = "seguro_de_caucion"  # garantía con póliza, sin persona garante
     CLAUSULA_LARGA = "clausula_larga"  # inventario de más de una página
+    # Documento: páginas como imagen de una fotocopia escaneada, sin capa de texto.
+    ESCANEO_TORCIDO = "escaneo_torcido"
 
 
 # Probabilidad de cada caso por semilla. Aproximada: alcanza para que cada uno aparezca
 # varias veces en un set de 50 y que la mayoría quede limpia. Como los sorteos son
-# independientes, la proporción limpia es el producto: 0,92⁴ × 0,95⁴ ≈ 58 %.
+# independientes, la proporción limpia es el producto: 0,92⁴ × 0,95⁵ ≈ 55 %.
 # El orden importa: elegir_casos recorre este dict, así que un caso nuevo va al final.
 P_CASO: dict[CasoDificil, float] = {
     CasoDificil.FECHA_FIRMA_EN_BLANCO: 0.08,
@@ -42,6 +44,7 @@ P_CASO: dict[CasoDificil, float] = {
     CasoDificil.CANON_ESCALONADO: 0.05,
     CasoDificil.SEGURO_DE_CAUCION: 0.05,
     CasoDificil.CLAUSULA_LARGA: 0.05,
+    CasoDificil.ESCANEO_TORCIDO: 0.05,
 }
 
 

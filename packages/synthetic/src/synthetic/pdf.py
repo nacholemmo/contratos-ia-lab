@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 
 from fpdf import FPDF
 from fpdf.enums import MethodReturnValue, XPos, YPos
+from PIL import Image
 
 from core.models import Contrato, Evidencia
 from synthetic.cases import (
@@ -20,6 +21,7 @@ from synthetic.cases import (
 )
 from synthetic.clauses import Clause, render_clauses
 from synthetic.contracts import generate_contrato
+from synthetic.scan import degradar, rasterizar
 from synthetic.source import Source
 
 MARCA = "SINTÉTICO"
@@ -102,14 +104,19 @@ def _write_firmas(pdf: FPDF) -> None:
     pdf.cell(85, ALTO_LINEA, "LA PARTE LOCATARIA", align="C", new_x=XPos.LMARGIN)
 
 
-def render_pdf(clauses: list[Clause]) -> tuple[bytes, dict[str, int]]:
-    """PDF del contrato y la página de cada cláusula (nombre → página)."""
-    pdf = ContratoPDF(format="A4")
+def _marcar_sintetico(pdf: FPDF) -> None:
+    """Metadatos que marcan el PDF como sintético, con fecha fija (mismos bytes por semilla)."""
     pdf.set_creation_date(FECHA_PDF)
     pdf.set_title(f"Contrato de locación ({MARCA})")
     pdf.set_subject(AVISO)
     pdf.set_keywords("sintetico")
     pdf.set_creator("contratos-ia-lab/synthetic")
+
+
+def render_pdf(clauses: list[Clause]) -> tuple[bytes, dict[str, int]]:
+    """PDF del contrato y la página de cada cláusula (nombre → página)."""
+    pdf = ContratoPDF(format="A4")
+    _marcar_sintetico(pdf)
     pdf.set_margins(20, 15, 20)
     pdf.set_auto_page_break(auto=True, margin=25)
     pdf.add_page()
@@ -121,6 +128,22 @@ def render_pdf(clauses: list[Clause]) -> tuple[bytes, dict[str, int]]:
     paginas = {clause.nombre: _write_clause(pdf, clause) for clause in clauses}
     _write_firmas(pdf)
     return bytes(pdf.output()), paginas
+
+
+def pdf_de_imagenes(paginas: list[Image.Image]) -> bytes:
+    """PDF con una imagen A4 por página y sin capa de texto, como sale de un escáner.
+
+    La marca "SINTÉTICO" ya está dibujada en cada imagen; los metadatos también la llevan.
+    """
+    pdf = FPDF(format="A4")
+    _marcar_sintetico(pdf)
+    pdf.set_auto_page_break(auto=False)
+    # JPEG, como guarda un escáner: más liviano y con sus propios artefactos de compresión.
+    pdf.set_image_filter("DCTDecode")
+    for pagina in paginas:
+        pdf.add_page()
+        pdf.image(pagina, x=0, y=0, w=pdf.w, h=pdf.h)
+    return bytes(pdf.output())
 
 
 def with_evidence(contrato: Contrato, clauses: list[Clause], paginas: dict[str, int]) -> Contrato:
@@ -169,6 +192,10 @@ def generate_sample(seed: int, casos: list[CasoDificil] | None = None) -> tuple[
     """
     casos, contrato, clauses = prepare_sample(seed, casos)
     pdf, paginas = render_pdf(clauses)
+    if CasoDificil.ESCANEO_TORCIDO in casos:
+        # Las páginas no cambian: la evidencia sigue valiendo, solo que ahora es imagen.
+        fuente = Source(seed).derive("escaneo")
+        pdf = pdf_de_imagenes([degradar(p, fuente) for p in rasterizar(pdf)])
     muestra = Muestra(seed=seed, casos=casos, contrato=with_evidence(contrato, clauses, paginas))
     return pdf, muestra
 
