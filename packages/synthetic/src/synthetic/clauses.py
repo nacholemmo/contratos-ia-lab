@@ -5,12 +5,15 @@ cada dato del `Contrato` que contiene. En el paso 3, al armar el PDF, se le suma
 página y eso es la evidencia del ground truth.
 """
 
-from dataclasses import dataclass, field
+from collections.abc import Sequence
+from dataclasses import dataclass, field, replace
+from decimal import Decimal
 
 from jinja2 import Environment, StrictUndefined
 
-from core.models import Contrato, Persona, RegimenLegal, Rol
+from core.models import Contrato, Moneda, Persona, RegimenLegal, Rol, TipoPropiedad
 from synthetic.amounts import EstiloMonto, format_monto
+from synthetic.cases import CasoDificil
 from synthetic.source import Source
 from synthetic.wording import (
     frase_ajuste,
@@ -79,9 +82,9 @@ PLANTILLAS: dict[str, tuple[str, ...]] = {
     ),
     "objeto": (
         "LA PARTE LOCADORA da en locación a LA PARTE LOCATARIA {{ propiedad }}, "
-        "con destino exclusivo de vivienda.",
+        "con destino exclusivo de {{ destino }}.",
         "El objeto del presente es {{ propiedad }}, que LA PARTE LOCATARIA recibe en "
-        "buen estado de conservación y destinará a vivienda familiar.",
+        "buen estado de conservación y destinará a {{ destino }}.",
     ),
     "plazo": (
         "El plazo de la locación se pacta en {{ plazo }}, a partir del {{ fecha_inicio }}.",
@@ -129,6 +132,12 @@ PLANTILLAS: dict[str, tuple[str, ...]] = {
         "LA PARTE LOCATARIA no podrá subalquilar, ceder ni prestar el inmueble, ni "
         "introducir en él sustancias peligrosas o actividades que perturben a los vecinos.",
     ),
+    "inventario": (
+        "El inmueble se entrega con los elementos que se detallan a continuación, que LA "
+        "PARTE LOCATARIA declara recibir de plena conformidad: {{ items }}.",
+        "Se deja constancia de que el inmueble cuenta con los siguientes elementos, que LA "
+        "PARTE LOCATARIA se obliga a restituir en el mismo estado: {{ items }}.",
+    ),
     "jurisdiccion": (
         "Para todos los efectos legales, las partes constituyen domicilio en los indicados en "
         "el encabezado y se someten a la jurisdicción de {{ tribunales }}, renunciando a "
@@ -166,6 +175,86 @@ PLANTILLAS_RESCISION: dict[RegimenLegal, tuple[str, ...]] = {
     RegimenLegal.DNU_70_2023: RESCISION_DNU,
 }
 
+# Caso CANON_ESCALONADO: el monto de cada año va en la cláusula de precio y la de ajuste
+# aclara que no hay otro. El fragmento de `monto_inicial` es el del primer año.
+PLANTILLAS_PRECIO_ESCALONADO: tuple[str, ...] = (
+    "El precio de la locación se pacta en forma escalonada: {{ escalones }}, pagaderos "
+    "por mes adelantado del 1 al 10 de cada mes.",
+    "LA PARTE LOCATARIA abonará un alquiler mensual escalonado, de la siguiente manera: "
+    "{{ escalones }}, dentro de los primeros diez días de cada período.",
+)
+AJUSTE_ESCALONADO: tuple[str, ...] = (
+    "no estará sujeto a otra actualización que la de los montos escalonados pactados",
+    "quedará fijado según la escala de la cláusula de precio, sin aplicar índice alguno",
+)
+ANIOS = ("primer", "segundo", "tercer", "cuarto", "quinto")
+# Aumento de un año al siguiente en un canon escalonado: aproximado, con la inflación de 2024-26.
+AUMENTO_ESCALONADO = (0.25, 0.70)
+
+# Caso SEGURO_DE_CAUCION. Aseguradoras inventadas a propósito: nada de nombres de empresas reales.
+PLANTILLAS_CAUCION: tuple[str, ...] = (
+    "LA PARTE LOCATARIA garantiza el cumplimiento de todas sus obligaciones mediante un "
+    "seguro de caución emitido por {{ aseguradora }}, póliza N° {{ poliza }}, cuyo original "
+    "se agrega al presente.",
+    "En garantía de las obligaciones asumidas, LA PARTE LOCATARIA contrata a favor de LA "
+    "PARTE LOCADORA un seguro de caución con {{ aseguradora }} (póliza N° {{ poliza }}), "
+    "que deberá mantener vigente durante toda la locación.",
+)
+ASEGURADORAS = (
+    "Seguros Ficticios del Oeste S.A.",
+    "Aseguradora Modelo de Cauciones S.A.",
+    "Cuyo Garantías Simuladas S.A.",
+)
+
+# Caso CLAUSULA_LARGA: un inventario que no entra en una página.
+AMBIENTES = (
+    "la cocina",
+    "el living comedor",
+    "el dormitorio principal",
+    "el segundo dormitorio",
+    "el baño",
+    "el lavadero",
+    "el balcón",
+    "el pasillo",
+)
+ELEMENTOS = (
+    "una mesada de granito",
+    "una bacha de acero inoxidable",
+    "un anafe de cuatro hornallas",
+    "un horno eléctrico empotrado",
+    "una alacena de melamina blanca",
+    "un calefactor tiro balanceado",
+    "dos ventanas con cortinas de enrollar",
+    "una puerta placa con cerradura de doble paleta",
+    "un placard de tres cuerpos con estantes",
+    "un espejo con botiquín",
+    "una ducha con mampara de vidrio",
+    "un termotanque a gas de ochenta litros",
+    "seis luminarias de techo con lámparas",
+    "una canilla monocomando",
+    "un aire acondicionado split frío/calor",
+    "un portero eléctrico con frente de calle",
+    "una llave de paso de gas",
+    "tres tomacorrientes dobles",
+)
+ESTADOS = (
+    "en buen estado",
+    "en perfecto estado de funcionamiento",
+    "con desgaste por uso normal",
+    "a nuevo",
+)
+# Con letra 11 entran unas 3.600 letras por página: 5.000 aseguran que la cláusula la supere.
+LARGO_MIN_INVENTARIO = 5_000
+
+# Caso GUIONES_DE_RELLENO: guiones al final del párrafo para que no se agregue texto después.
+GUIONES = (8, 30)
+
+# Destino según el tipo de inmueble; los demás tipos van a vivienda.
+DESTINO_POR_TIPO = {
+    TipoPropiedad.LOCAL: "uso comercial",
+    TipoPropiedad.OFICINA: "oficina de uso profesional",
+}
+
 TITULOS = {
     "objeto": "OBJETO",
     "plazo": "PLAZO",
@@ -175,6 +264,7 @@ TITULOS = {
     "garantia": "GARANTÍA",
     "expensas": "EXPENSAS Y SERVICIOS",
     "conservacion": "CONSERVACIÓN Y REPARACIONES",
+    "inventario": "INVENTARIO",
     "prohibiciones": "PROHIBICIONES",
     "rescision": "RESCISIÓN",
     "jurisdiccion": "DOMICILIOS Y JURISDICCIÓN",
@@ -212,12 +302,41 @@ def _estilo_monto(source: Source, solo_letras: bool) -> EstiloMonto:
     return source.rng.choices(list(EstiloMonto), weights=[0.3, 0.2, 0.5])[0]
 
 
-def render_clauses(contrato: Contrato, source: Source, solo_letras: bool = False) -> list[Clause]:
+def escalones(
+    monto_inicial: Decimal, moneda: Moneda, plazo_meses: int, source: Source
+) -> list[Decimal]:
+    """Alquiler mensual de cada año de un canon escalonado; el primero es `monto_inicial`.
+
+    Redondeado como se escribe en un contrato: a miles en pesos y a decenas en dólares.
+    """
+    redondeo = Decimal(1_000) if moneda == Moneda.ARS else Decimal(10)
+    montos = [monto_inicial]
+    for _ in range(plazo_meses // 12 - 1):
+        aumento = Decimal(str(round(source.rng.uniform(*AUMENTO_ESCALONADO), 2)))
+        siguiente = montos[-1] * (1 + aumento)
+        montos.append((siguiente / redondeo).quantize(Decimal(1)) * redondeo)
+    return montos
+
+
+def _inventario(source: Source) -> str:
+    items: list[str] = []
+    while len("; ".join(items)) < LARGO_MIN_INVENTARIO:
+        elemento, ambiente = source.rng.choice(ELEMENTOS), source.rng.choice(AMBIENTES)
+        items.append(f"({len(items) + 1}) {elemento} en {ambiente}, {source.rng.choice(ESTADOS)}")
+    return "; ".join(items)
+
+
+def render_clauses(
+    contrato: Contrato, source: Source, casos: Sequence[CasoDificil] = ()
+) -> list[Clause]:
     """Cláusulas del contrato en orden, con variantes elegidas por `source`.
 
-    `solo_letras` fuerza todos los montos en letras (caso difícil MONTOS_SOLO_LETRAS).
+    `casos` cambia la forma del texto (montos en letras, guiones, cláusulas raras). Los
+    datos del contrato ya vienen con los casos aplicados (`aplicar_casos`).
     """
     c = contrato
+    solo_letras = CasoDificil.MONTOS_SOLO_LETRAS in casos
+    escalonado = CasoDificil.CANON_ESCALONADO in casos
     por_rol = {rol: [p for p in c.partes if p.rol == rol] for rol in Rol}
     numerar = source.rng.choice(
         (
@@ -255,7 +374,10 @@ def render_clauses(contrato: Contrato, source: Source, solo_letras: bool = False
     cuerpo: list[tuple[str, dict[str, object], dict[str, str]]] = []
 
     propiedad = frase_propiedad(source, c.propiedad)
-    cuerpo.append(("objeto", {"propiedad": propiedad}, {"propiedad": propiedad}))
+    destino = DESTINO_POR_TIPO.get(c.propiedad.tipo, "vivienda")
+    cuerpo.append(
+        ("objeto", {"propiedad": propiedad, "destino": destino}, {"propiedad": propiedad})
+    )
 
     plazo = frase_plazo(source, c.plazo_meses)
     inicio = frase_fecha(source, c.fecha_inicio)
@@ -267,10 +389,33 @@ def render_clauses(contrato: Contrato, source: Source, solo_letras: bool = False
         )
     )
 
-    monto = format_monto(c.monto_inicial, c.moneda, _estilo_monto(source, solo_letras))
-    cuerpo.append(("precio", {"monto": monto}, {"monto_inicial": monto, "moneda": monto}))
-
-    ajuste = frase_ajuste(source, c.indice, c.frecuencia_ajuste_meses)
+    if escalonado:
+        montos = escalones(c.monto_inicial, c.moneda, c.plazo_meses, source.derive("escalones"))
+        periodo = source.rng.choice(
+            (
+                lambda i: f"durante el {ANIOS[i]} año",
+                lambda i: f"del mes {12 * i + 1} al mes {12 * (i + 1)}",
+            )
+        )
+        tramos = [
+            f"{periodo(i)}, {format_monto(m, c.moneda, _estilo_monto(source, solo_letras))} "
+            "mensuales"
+            for i, m in enumerate(montos)
+        ]
+        texto_escalones = "; ".join(tramos)
+        primero = tramos[0]
+        cuerpo.append(
+            (
+                "precio",
+                {"escalones": texto_escalones},
+                {"monto_inicial": primero, "moneda": primero},
+            )
+        )
+        ajuste = source.rng.choice(AJUSTE_ESCALONADO)
+    else:
+        monto = format_monto(c.monto_inicial, c.moneda, _estilo_monto(source, solo_letras))
+        cuerpo.append(("precio", {"monto": monto}, {"monto_inicial": monto, "moneda": monto}))
+        ajuste = frase_ajuste(source, c.indice, c.frecuencia_ajuste_meses)
     fragmentos_ajuste = {"indice": ajuste}
     if c.frecuencia_ajuste_meses is not None:
         fragmentos_ajuste["frecuencia_ajuste_meses"] = ajuste
@@ -281,12 +426,20 @@ def render_clauses(contrato: Contrato, source: Source, solo_letras: bool = False
         cuerpo.append(("deposito", {"deposito": deposito}, {"deposito": deposito}))
 
     garantes = por_rol[Rol.GARANTE]
-    if garantes:
+    if CasoDificil.SEGURO_DE_CAUCION in casos:
+        variables = {
+            "aseguradora": source.rng.choice(ASEGURADORAS),
+            "poliza": str(source.rng.randint(100_000, 999_999)),
+        }
+        cuerpo.append(("garantia", variables, {}))
+    elif garantes:
         variables = {"garantes": _personas(source, garantes), "plural": len(garantes) > 1}
         cuerpo.append(("garantia", variables, {}))
 
     cuerpo.append(("expensas", {}, {}))
     cuerpo.append(("conservacion", {}, {}))
+    if CasoDificil.CLAUSULA_LARGA in casos:
+        cuerpo.append(("inventario", {"items": _inventario(source)}, {}))
     cuerpo.append(("prohibiciones", {}, {}))
     cuerpo.append(("rescision", {}, {}))
     tribunales = frase_tribunales(c.propiedad.localidad, c.propiedad.provincia)
@@ -294,6 +447,10 @@ def render_clauses(contrato: Contrato, source: Source, solo_letras: bool = False
 
     # Cláusulas cuyo texto legal depende del contrato (no solo la forma).
     por_contrato = {"rescision": PLANTILLAS_RESCISION[c.regimen_legal]}
+    if escalonado:
+        por_contrato["precio"] = PLANTILLAS_PRECIO_ESCALONADO
+    if CasoDificil.SEGURO_DE_CAUCION in casos:
+        por_contrato["garantia"] = PLANTILLAS_CAUCION
 
     for i, (nombre, variables, fragmentos) in enumerate(cuerpo):
         plantillas = por_contrato[nombre] if nombre in por_contrato else PLANTILLAS[nombre]
@@ -309,4 +466,10 @@ def render_clauses(contrato: Contrato, source: Source, solo_letras: bool = False
     clauses.append(
         Clause("cierre", None, cierre, {"fecha_firma": fecha_cierre} if fecha_cierre else {})
     )
+    if CasoDificil.GUIONES_DE_RELLENO in casos:
+        # Al final del párrafo: los fragmentos de evidencia siguen apareciendo literales.
+        clauses = [
+            replace(clause, texto=clause.texto + "-" * source.rng.randint(*GUIONES))
+            for clause in clauses
+        ]
     return clauses

@@ -10,7 +10,14 @@ from fpdf import FPDF
 from fpdf.enums import MethodReturnValue, XPos, YPos
 
 from core.models import Contrato, Evidencia
-from synthetic.cases import CasoDificil, Muestra, aplicar_faltantes, elegir_casos, normalizar_casos
+from synthetic.cases import (
+    CasoDificil,
+    Muestra,
+    aplicar_casos,
+    elegir_casos,
+    es_aplicable,
+    normalizar_casos,
+)
 from synthetic.clauses import Clause, render_clauses
 from synthetic.contracts import generate_contrato
 from synthetic.source import Source
@@ -131,21 +138,36 @@ def with_evidence(contrato: Contrato, clauses: list[Clause], paginas: dict[str, 
     return contrato.model_copy(update=update)
 
 
+def prepare_sample(
+    seed: int, casos: list[CasoDificil] | None = None
+) -> tuple[list[CasoDificil], Contrato, list[Clause]]:
+    """Casos, datos y cláusulas del contrato de la semilla, antes de armar el PDF.
+
+    Sin `casos`, la semilla elige los suyos y se descartan los que no aplican a su
+    contrato. Con `casos`, se fuerzan esos (`[]` da un contrato limpio) y uno que no
+    aplica es un error: el test pidió algo que no puede existir.
+    """
+    base = generate_contrato(seed)
+    fuente_casos = Source(seed).derive("casos")
+    if casos is None:
+        casos = [caso for caso in elegir_casos(fuente_casos) if es_aplicable(caso, base)]
+    else:
+        no_aplicables = [caso for caso in casos if not es_aplicable(caso, base)]
+        if no_aplicables:
+            raise ValueError(f"no aplican al contrato de la semilla {seed}: {no_aplicables}")
+    casos = normalizar_casos(casos)
+    contrato = aplicar_casos(base, casos, fuente_casos)
+    clauses = render_clauses(contrato, Source(seed).derive("redaccion"), casos)
+    return casos, contrato, clauses
+
+
 def generate_sample(seed: int, casos: list[CasoDificil] | None = None) -> tuple[bytes, Muestra]:
     """PDF sintético y su ground truth etiquetado (misma semilla → mismos bytes).
 
-    Sin `casos`, la semilla elige los suyos; con `casos`, se fuerzan esos (`[]` da un
-    contrato limpio). Los casos usan su propia sub-fuente: elegirlos no cambia los datos
-    ni la redacción del resto del contrato.
+    Los casos usan su propia sub-fuente: elegirlos no cambia los datos ni la redacción
+    del resto del contrato. Ver `prepare_sample` para cómo se eligen.
     """
-    fuente_casos = Source(seed).derive("casos")
-    casos = normalizar_casos(elegir_casos(fuente_casos) if casos is None else casos)
-    contrato = aplicar_faltantes(generate_contrato(seed), casos, fuente_casos)
-    clauses = render_clauses(
-        contrato,
-        Source(seed).derive("redaccion"),
-        solo_letras=CasoDificil.MONTOS_SOLO_LETRAS in casos,
-    )
+    casos, contrato, clauses = prepare_sample(seed, casos)
     pdf, paginas = render_pdf(clauses)
     muestra = Muestra(seed=seed, casos=casos, contrato=with_evidence(contrato, clauses, paginas))
     return pdf, muestra

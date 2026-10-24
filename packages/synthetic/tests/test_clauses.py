@@ -2,7 +2,7 @@ from collections import defaultdict
 
 import pytest
 
-from core.models import RegimenLegal
+from core.models import RegimenLegal, TipoPropiedad
 from synthetic.clauses import PLANTILLAS_RESCISION, render_clauses
 from synthetic.contracts import generate_contrato
 from synthetic.source import Source
@@ -121,3 +121,14 @@ def test_redaccion_no_cambia_los_datos():
     for seed in range(20):
         contrato, _ = _render(seed)
         assert contrato == generate_contrato(seed)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_destino_segun_tipo_de_propiedad(seed):
+    contrato, clauses = _render(seed)
+    objeto = next(c for c in clauses if c.nombre == "objeto").texto
+    # Un local no se alquila "con destino de vivienda" (y la cláusula decía eso para todos).
+    assert ("uso comercial" in objeto) == (contrato.propiedad.tipo == TipoPropiedad.LOCAL)
+    assert ("vivienda" in objeto) == (
+        contrato.propiedad.tipo not in (TipoPropiedad.LOCAL, TipoPropiedad.OFICINA)
+    )

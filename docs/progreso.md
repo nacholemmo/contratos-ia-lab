@@ -176,3 +176,16 @@ Plantilla para cada entrada (copiar y completar):
   - Si 4b y 4c suman casos al 10 %, el set limpio baja del 50 % y falla `test_la_mayoria_de_los_contratos_queda_limpia`: bajar las probabilidades o generar un set limpio aparte.
   - Fecha de firma en blanco: el ground truth conserva `regimen_legal` de la fecha real. Relacionado con la duda de la Fase 4 sobre qué hace el extractor si `fecha_firma` es null.
   - Faltante del depósito (la cláusula está pero sin monto): el modelo no lo puede distinguir de "no hay depósito". Decidirlo si aparece en contratos reales.
+
+### 2026-10-24 — Fase 1, paso 4b: cláusulas raras y casos según el contrato
+- **Qué construí:** cuatro casos nuevos en `CasoDificil`: `GUIONES_DE_RELLENO` (guiones al final de cada párrafo), `CANON_ESCALONADO` (monto de cada año en la cláusula de precio, índice `FIJO` en el modelo y el monto del primer año como `monto_inicial`), `SEGURO_DE_CAUCION` (póliza de una aseguradora inventada en lugar de la persona garante) y `CLAUSULA_LARGA` (inventario de más de una página). Probabilidades: 8 % los de 4a y 5 % los nuevos, para que el set limpio quede en ~58 %. `es_aplicable` (mía): canon escalonado solo con DNU 70/2023 y plazo de 24 meses o más (también en dólares), caución solo si el contrato tenía garante (la reemplaza), y el resto siempre. `prepare_sample` descarta los casos sorteados que no aplican y tira `ValueError` con los forzados. `aplicar_faltantes` pasa a ser `aplicar_casos`. Arreglo: la cláusula de objeto dice "uso comercial" para locales, "oficina de uso profesional" para oficinas y "vivienda" para el resto. Verificado: `uv run pytest packages/synthetic` → 2023 passed; `ruff check` y `ruff format` sin errores.
+- **Qué aprendí:**
+  - Un caso difícil tiene que ser **realista**: un canon escalonado bajo la Ley 27.551 o un contrato de 12 meses con "segundo año" no existen, y un extractor evaluado con documentos imposibles mide algo que nunca va a ver en producción.
+  - Sorteado y forzado reaccionan distinto: si lo sorteó la semilla y no aplica, se descarta (es azar); si lo forzó un test, es un error (pidió algo imposible y tiene que enterarse ya).
+  - La frecuencia real de un caso es `P_CASO` × la proporción de contratos donde aplica (caución ≈ 0,05 × 2/3 ≈ 3 %). Para medir bien un caso raro, conviene un set forzado por caso además del sorteado.
+  - Python resuelve los nombres al ejecutar la línea: un import que falta no avisa hasta que se usa (`NameError`). `ruff check` (F821) lo detecta antes, como un compilador.
+- **Dudas abiertas:**
+  - Canon escalonado: `Contrato` solo guarda el monto del primer año; los demás escalones quedan en el texto. Si Avisa los necesita para calcular los aumentos, hace falta un campo nuevo (Fase 3, junto con el tipo de garantía).
+  - Tipo de garantía (persona o caución): ya era candidato a campo para la Fase 3 y ahora el generador lo produce. Hoy solo se nota por la ausencia de garantes.
+  - La evidencia de un dato *dentro* de una cláusula de más de una página quedaría con la última página. El inventario no tiene datos, así que no pasa; revisarlo si una cláusula larga llega a tener uno.
+  - Para la Fase 4: set forzado por caso (N contratos con cada caso) además del sorteado.

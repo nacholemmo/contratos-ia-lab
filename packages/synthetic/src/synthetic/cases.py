@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from core.models import Contrato
+from core.models import Contrato, Indice, RegimenLegal, Rol
 from synthetic.source import Source
 
 
@@ -22,15 +22,26 @@ class CasoDificil(StrEnum):
     SIN_CODIGO_POSTAL = "sin_codigo_postal"
     # Formato: todos los montos del contrato solo en letras, sin la cifra al lado.
     MONTOS_SOLO_LETRAS = "montos_solo_letras"
+    GUIONES_DE_RELLENO = "guiones_de_relleno"  # ".-----" al final de cada párrafo
+    # Cláusulas raras: el contrato dice lo mismo de otra forma, o algo que no es lo usual.
+    CANON_ESCALONADO = "canon_escalonado"  # monto de cada año fijado de antemano, sin índice
+    SEGURO_DE_CAUCION = "seguro_de_caucion"  # garantía con póliza, sin persona garante
+    CLAUSULA_LARGA = "clausula_larga"  # inventario de más de una página
 
 
 # Probabilidad de cada caso por semilla. Aproximada: alcanza para que cada uno aparezca
-# varias veces en un set de 50 y que la mayoría de los contratos quede limpia.
+# varias veces en un set de 50 y que la mayoría quede limpia. Como los sorteos son
+# independientes, la proporción limpia es el producto: 0,92⁴ × 0,95⁴ ≈ 58 %.
+# El orden importa: elegir_casos recorre este dict, así que un caso nuevo va al final.
 P_CASO: dict[CasoDificil, float] = {
-    CasoDificil.FECHA_FIRMA_EN_BLANCO: 0.10,
-    CasoDificil.PERSONA_SIN_DOCUMENTO: 0.10,
-    CasoDificil.SIN_CODIGO_POSTAL: 0.10,
-    CasoDificil.MONTOS_SOLO_LETRAS: 0.10,
+    CasoDificil.FECHA_FIRMA_EN_BLANCO: 0.08,
+    CasoDificil.PERSONA_SIN_DOCUMENTO: 0.08,
+    CasoDificil.SIN_CODIGO_POSTAL: 0.08,
+    CasoDificil.MONTOS_SOLO_LETRAS: 0.08,
+    CasoDificil.GUIONES_DE_RELLENO: 0.05,
+    CasoDificil.CANON_ESCALONADO: 0.05,
+    CasoDificil.SEGURO_DE_CAUCION: 0.05,
+    CasoDificil.CLAUSULA_LARGA: 0.05,
 }
 
 
@@ -55,23 +66,44 @@ def elegir_casos(source: Source) -> list[CasoDificil]:
     return cases
 
 
+def es_aplicable(caso: CasoDificil, contrato: Contrato) -> bool:
+    """Si el caso puede darse en este contrato real (ej. un canon escalonado solo donde la ley
+    lo permite). Se evalúa sobre el contrato limpio, antes de aplicar ningún caso."""
+
+    if caso == CasoDificil.CANON_ESCALONADO:
+        return contrato.regimen_legal == RegimenLegal.DNU_70_2023 and contrato.plazo_meses >= 24
+    if caso == CasoDificil.SEGURO_DE_CAUCION:
+        return any(p.rol == Rol.GARANTE for p in contrato.partes)
+    return True
+
+
 def normalizar_casos(casos: list[CasoDificil]) -> list[CasoDificil]:
     """Sin repetidos y en el orden del enum, para que el JSON no dependa de cómo se pidieron."""
     return [caso for caso in CasoDificil if caso in casos]
 
 
-def aplicar_faltantes(contrato: Contrato, casos: list[CasoDificil], source: Source) -> Contrato:
-    """Copia del contrato con los datos faltantes en null (el resto de los casos no toca datos)."""
+def aplicar_casos(contrato: Contrato, casos: list[CasoDificil], source: Source) -> Contrato:
+    """Copia del contrato con los datos que cambian por cada caso
+    (los de formato no tocan datos)."""
     update: dict[str, object] = {}
+    partes = contrato.partes
     if CasoDificil.FECHA_FIRMA_EN_BLANCO in casos:
         # El régimen sigue siendo el de la fecha real: el generador la conoce aunque el papel no.
         update["fecha_firma"] = None
+    if CasoDificil.CANON_ESCALONADO in casos:
+        # Los montos de cada año van en el texto; el modelo solo guarda el del primero.
+        update["indice"] = Indice.FIJO
+        update["frecuencia_ajuste_meses"] = None
+    if CasoDificil.SEGURO_DE_CAUCION in casos:
+        partes = [p for p in partes if p.rol != Rol.GARANTE]
     if CasoDificil.PERSONA_SIN_DOCUMENTO in casos:
-        elegida = source.rng.randrange(len(contrato.partes))
-        update["partes"] = [
+        elegida = source.rng.randrange(len(partes))
+        partes = [
             p.model_copy(update={"dni": None, "cuit": None}) if i == elegida else p
-            for i, p in enumerate(contrato.partes)
+            for i, p in enumerate(partes)
         ]
+    if partes is not contrato.partes:
+        update["partes"] = partes
     if CasoDificil.SIN_CODIGO_POSTAL in casos:
         update["propiedad"] = contrato.propiedad.model_copy(update={"codigo_postal": None})
     return contrato.model_copy(update=update)
