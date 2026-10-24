@@ -5,6 +5,7 @@ contrato es "difícil"): son metadatos del set y viajan en `Muestra`. En la Fase
 reporta la precisión por etiqueta y, aparte, la del set sin casos (el representativo).
 """
 
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal
 
@@ -46,6 +47,32 @@ P_CASO: dict[CasoDificil, float] = {
     CasoDificil.CLAUSULA_LARGA: 0.05,
     CasoDificil.ESCANEO_TORCIDO: 0.05,
 }
+
+
+# Caso SEGURO_DE_CAUCION. Aseguradoras inventadas a propósito: nada de nombres de empresas
+# reales. Las usan también las pólizas del legajo (caución y seguro del inmueble).
+ASEGURADORAS = (
+    "Seguros Ficticios del Oeste S.A.",
+    "Aseguradora Modelo de Cauciones S.A.",
+    "Cuyo Garantías Simuladas S.A.",
+)
+
+
+@dataclass(frozen=True)
+class DatosCaucion:
+    """Aseguradora y póliza de la caución: las mismas en la cláusula y en la póliza del legajo."""
+
+    aseguradora: str
+    poliza: str
+
+
+def datos_caucion(seed: int) -> DatosCaucion:
+    """Datos de la caución de la semilla, con su propia sub-fuente (no dependen de la redacción)."""
+    source = Source(seed).derive("caucion")
+    return DatosCaucion(
+        aseguradora=source.rng.choice(ASEGURADORAS),
+        poliza=str(source.rng.randint(100_000, 999_999)),
+    )
 
 
 class Muestra(BaseModel):

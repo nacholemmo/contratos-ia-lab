@@ -4,7 +4,7 @@ from io import BytesIO
 import pytest
 from pypdf import PdfReader
 
-from core.models import DNI
+from core.models import DNI, Rol
 from synthetic.cases import CasoDificil
 from synthetic.contracts import generate_contrato, generate_contrato_con_identidades
 from synthetic.dni import (
@@ -15,7 +15,7 @@ from synthetic.dni import (
     fechas_dni,
     generate_dnis,
 )
-from synthetic.pdf import AVISO, MARCA, generate_sample
+from synthetic.pdf import AVISO, MARCA, generate_sample, prepare_sample
 from synthetic.source import Source
 
 SEEDS = range(20)
@@ -96,9 +96,10 @@ def test_hay_variedad_de_edades(fechas):
 @pytest.mark.parametrize("seed", SEEDS)
 def test_un_dni_por_parte_coherente_con_el_contrato(seed):
     contrato, identidades = generate_contrato_con_identidades(seed)
+    firmantes = [p.id for p in prepare_sample(seed)[1].partes]
     dnis = generate_dnis(seed)
-    assert list(dnis) == [p.id for p in contrato.partes]
-    for persona in contrato.partes:
+    assert list(dnis) == firmantes
+    for persona in [p for p in contrato.partes if p.id in firmantes]:
         _, dni = dnis[persona.id]
         identidad = identidades[persona.id]
         assert dni.numero == persona.dni
@@ -149,3 +150,14 @@ def test_persona_sin_documento_en_el_contrato_lo_tiene_en_su_dni():
     _, dni = generate_dnis(seed)[sin_doc.id]
     original = next(p for p in generate_contrato(seed).partes if p.id == sin_doc.id)
     assert dni.numero == original.dni
+
+
+def test_con_caucion_no_hay_dni_de_garantes():
+    # Con el caso, el contrato no tiene garantes: el legajo tampoco trae sus DNI.
+    seed = next(
+        s for s in SEEDS if any(p.rol == Rol.GARANTE for p in generate_contrato(s).partes)
+    )
+    dnis = generate_dnis(seed, casos=[CasoDificil.SEGURO_DE_CAUCION])
+    garantes = {p.id for p in generate_contrato(seed).partes if p.rol == Rol.GARANTE}
+    assert garantes
+    assert not garantes & set(dnis)

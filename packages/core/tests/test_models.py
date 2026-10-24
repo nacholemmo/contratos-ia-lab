@@ -14,10 +14,14 @@ from core.models import (
     Indice,
     Moneda,
     Persona,
+    Poliza,
+    PolizaCaucion,
     ReciboSueldo,
     RegimenLegal,
     Rol,
+    SeguroInmueble,
     Sexo,
+    TituloPropiedad,
 )
 
 # CUIT sintéticos con dígito verificador correcto (calculado con módulo 11).
@@ -204,3 +208,44 @@ def test_recibo_todo_dato_tiene_su_evidencia():
         n.removesuffix("_evidencia") for n in ReciboSueldo.model_fields if n.endswith("_evidencia")
     }
     assert datos == evidencias
+
+
+# --- Garantía y seguros ---
+
+
+@pytest.mark.parametrize(
+    ("modelo", "obligatorios"),
+    [
+        (TituloPropiedad, {"titular", "inmueble"}),
+        (PolizaCaucion, {"aseguradora"}),
+        (SeguroInmueble, {"aseguradora"}),
+    ],
+)
+def test_obligatorios_de_garantia_y_seguros(modelo, obligatorios):
+    assert set(modelo.model_json_schema()["required"]) == obligatorios
+
+
+@pytest.mark.parametrize("modelo", [TituloPropiedad, PolizaCaucion, SeguroInmueble])
+def test_garantia_y_seguros_todo_dato_tiene_su_evidencia(modelo):
+    datos = {n for n in modelo.model_fields if not n.endswith("_evidencia")}
+    evidencias = {
+        n.removesuffix("_evidencia") for n in modelo.model_fields if n.endswith("_evidencia")
+    }
+    assert datos == evidencias
+
+
+def test_polizas_comparten_la_base():
+    # Aseguradora, número y vigencia: lo que Avisa necesita para avisar cuando vence.
+    for modelo in (PolizaCaucion, SeguroInmueble):
+        assert issubclass(modelo, Poliza)
+        assert {"aseguradora", "numero_poliza", "vigencia_hasta"} <= set(modelo.model_fields)
+
+
+def test_titulo_dni_del_titular_con_formato_invalido_rechazado():
+    with pytest.raises(ValidationError, match="titular_dni"):
+        TituloPropiedad(titular="Juan PÉREZ", inmueble="Calle 1 123", titular_dni="30.123.456")
+
+
+def test_caucion_suma_con_mas_de_dos_decimales_rechazada():
+    with pytest.raises(ValidationError, match="suma_asegurada"):
+        PolizaCaucion(aseguradora="X S.A.", suma_asegurada=Decimal("1.001"))

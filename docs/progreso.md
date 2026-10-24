@@ -230,3 +230,14 @@ Plantilla para cada entrada (copiar y completar):
   - Un recibo por inquilino; las inmobiliarias suelen pedir los últimos tres. Sumarlos si un eval los necesita.
   - Contratos en dólares: el recibo usa un alquiler típico en pesos del año en vez de una cotización. Revisarlo si Avisa evalúa la relación alquiler/ingreso en USD.
   - Garantes: en la realidad también presentan recibos. Hoy solo los inquilinos; revisarlo en 5c.
+
+### 2026-10-24 — Fase 1, paso 5c: garantía y seguro (cierra el paso 5)
+- **Qué construí (lo escribió Claude, a pedido mío):** refactor de 4b: la aseguradora y la póliza de la caución salen de `datos_caucion(seed)` antes de redactar, así la cláusula y la póliza del legajo coinciden. En core: `TituloPropiedad` (titular e inmueble obligatorios), una base `Poliza` (aseguradora, número, vigencia) y sus hijas `PolizaCaucion` (tomador, asegurado, suma y moneda) y `SeguroInmueble` (asegurado, ubicación del riesgo, suma). `legajo.py`: `ContextoLegajo` con el contrato con casos (quién firma) y el limpio con sus identidades (los datos completos), la fecha de referencia, `sumar_meses` y `fin_de_contrato`. `fichas.py`: ficha genérica y `direccion()`. `garantia.py`: un título por garante que firma (otro inmueble, escritura desde sus 18 años) o, con el caso, la póliza de caución por todo el plazo. `seguro.py`: incendio, anual desde el inicio, a nombre del primer inquilino. DNI y recibo usan el contexto. Verificado: `uv run pytest packages/core packages/synthetic` → 3045 passed.
+- **Qué aprendí:**
+  - Dos modelos de garantía y no uno con un campo `tipo`: comparten casi nada, y un modelo único tendría la mitad de los campos siempre en null y un esquema confuso para el LLM. Lo común (aseguradora, número, vigencia) sí va en una base: es lo que Avisa usa para avisar vencimientos.
+  - Cada documento del legajo usa dos contratos: el limpio para los datos y el aplicado para saber quién está. Pensarlo así encontró un bug de 5a que ningún test detectaba: con caución, el legajo traía DNI de garantes que el contrato ya no tenía.
+  - Un dato que aparece en dos documentos (la póliza en la cláusula y en el legajo) tiene que generarse una vez, antes de los dos, y no adentro de uno de ellos.
+- **Dudas abiertas:**
+  - Título y póliza de caución son los dos `TipoDocumento.GARANTIA`: el extractor de la Fase 3 los tiene que distinguir (¿subtipo en la clasificación?).
+  - El seguro es anual y el contrato dura más: las renovaciones (y el aviso de vencimiento) son de Avisa; acá solo la primera póliza.
+  - Garantes con recibo de sueldo en vez de título (pasa en la realidad): no se generan.

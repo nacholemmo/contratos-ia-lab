@@ -13,7 +13,7 @@ from jinja2 import Environment, StrictUndefined
 
 from core.models import Contrato, Moneda, Persona, RegimenLegal, Rol, TipoPropiedad
 from synthetic.amounts import EstiloMonto, format_monto
-from synthetic.cases import CasoDificil
+from synthetic.cases import CasoDificil, DatosCaucion
 from synthetic.source import Source
 from synthetic.wording import (
     frase_ajuste,
@@ -191,7 +191,7 @@ ANIOS = ("primer", "segundo", "tercer", "cuarto", "quinto")
 # Aumento de un año al siguiente en un canon escalonado: aproximado, con la inflación de 2024-26.
 AUMENTO_ESCALONADO = (0.25, 0.70)
 
-# Caso SEGURO_DE_CAUCION. Aseguradoras inventadas a propósito: nada de nombres de empresas reales.
+# Caso SEGURO_DE_CAUCION: aseguradora y póliza vienen de `datos_caucion` (cases.py).
 PLANTILLAS_CAUCION: tuple[str, ...] = (
     "LA PARTE LOCATARIA garantiza el cumplimiento de todas sus obligaciones mediante un "
     "seguro de caución emitido por {{ aseguradora }}, póliza N° {{ poliza }}, cuyo original "
@@ -200,12 +200,6 @@ PLANTILLAS_CAUCION: tuple[str, ...] = (
     "PARTE LOCADORA un seguro de caución con {{ aseguradora }} (póliza N° {{ poliza }}), "
     "que deberá mantener vigente durante toda la locación.",
 )
-ASEGURADORAS = (
-    "Seguros Ficticios del Oeste S.A.",
-    "Aseguradora Modelo de Cauciones S.A.",
-    "Cuyo Garantías Simuladas S.A.",
-)
-
 # Caso CLAUSULA_LARGA: un inventario que no entra en una página.
 AMBIENTES = (
     "la cocina",
@@ -327,12 +321,16 @@ def _inventario(source: Source) -> str:
 
 
 def render_clauses(
-    contrato: Contrato, source: Source, casos: Sequence[CasoDificil] = ()
+    contrato: Contrato,
+    source: Source,
+    casos: Sequence[CasoDificil] = (),
+    caucion: DatosCaucion | None = None,
 ) -> list[Clause]:
     """Cláusulas del contrato en orden, con variantes elegidas por `source`.
 
     `casos` cambia la forma del texto (montos en letras, guiones, cláusulas raras). Los
-    datos del contrato ya vienen con los casos aplicados (`aplicar_casos`).
+    datos del contrato ya vienen con los casos aplicados (`aplicar_casos`). `caucion` es
+    obligatorio con el caso SEGURO_DE_CAUCION: la póliza del legajo repite esos datos.
     """
     c = contrato
     solo_letras = CasoDificil.MONTOS_SOLO_LETRAS in casos
@@ -427,10 +425,9 @@ def render_clauses(
 
     garantes = por_rol[Rol.GARANTE]
     if CasoDificil.SEGURO_DE_CAUCION in casos:
-        variables = {
-            "aseguradora": source.rng.choice(ASEGURADORAS),
-            "poliza": str(source.rng.randint(100_000, 999_999)),
-        }
+        if caucion is None:
+            raise ValueError("el caso SEGURO_DE_CAUCION necesita los datos de la caución")
+        variables = {"aseguradora": caucion.aseguradora, "poliza": caucion.poliza}
         cuerpo.append(("garantia", variables, {}))
     elif garantes:
         variables = {"garantes": _personas(source, garantes), "plural": len(garantes) > 1}

@@ -15,6 +15,7 @@ from synthetic.cases import (
     CasoDificil,
     Muestra,
     aplicar_casos,
+    datos_caucion,
     elegir_casos,
     es_aplicable,
     normalizar_casos,
@@ -180,7 +181,8 @@ def prepare_sample(
             raise ValueError(f"no aplican al contrato de la semilla {seed}: {no_aplicables}")
     casos = normalizar_casos(casos)
     contrato = aplicar_casos(base, casos, fuente_casos)
-    clauses = render_clauses(contrato, Source(seed).derive("redaccion"), casos)
+    caucion = datos_caucion(seed) if CasoDificil.SEGURO_DE_CAUCION in casos else None
+    clauses = render_clauses(contrato, Source(seed).derive("redaccion"), casos, caucion)
     return casos, contrato, clauses
 
 

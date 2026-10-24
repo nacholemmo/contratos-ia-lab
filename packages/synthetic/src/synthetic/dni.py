@@ -12,11 +12,11 @@ así el legajo es coherente y en la Fase 4 se pueden evaluar los cruces entre do
 from datetime import date, timedelta
 from uuid import UUID
 
-from fpdf.enums import XPos, YPos
-
-from core.models import DNI, Contrato, Evidencia, Sexo
-from synthetic.contracts import LOCALIDADES, Identidad, generate_contrato_con_identidades
-from synthetic.pdf import ContratoPDF, marcar_sintetico
+from core.models import DNI, Evidencia, Sexo
+from synthetic import fichas
+from synthetic.cases import CasoDificil
+from synthetic.contracts import LOCALIDADES, Identidad
+from synthetic.legajo import ContextoLegajo, contexto_legajo
 from synthetic.source import Source
 
 TITULO = "FICHA DE IDENTIDAD"
@@ -44,10 +44,6 @@ ETIQUETAS = {
     "fecha_vencimiento": "Fecha de vencimiento",
     "domicilio": "Domicilio",
 }
-
-ALTO_FILA = 9
-ANCHO_ETIQUETA = 55
-
 
 def sumar_anios(d: date, anios: int) -> date:
     """`d` corrida `anios` años (negativo: hacia atrás).
@@ -150,24 +146,8 @@ def _valores(dni: DNI, source: Source) -> dict[str, str]:
 def render_ficha(dni: DNI, source: Source) -> tuple[bytes, dict[str, str]]:
     """PDF de una página con la ficha y el texto impreso de cada dato (campo → fragmento)."""
     valores = _valores(dni, source)
-    pdf = ContratoPDF(format="A4")
-    marcar_sintetico(pdf, "Ficha de identidad")
-    pdf.set_margins(20, 15, 20)
-    pdf.set_auto_page_break(auto=False)
-    pdf.add_page()
-
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(0, 12, TITULO, align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.ln(4)
-    arriba = pdf.get_y()
-    for campo, valor in valores.items():
-        pdf.set_font("Helvetica", "B", 10)
-        pdf.cell(ANCHO_ETIQUETA, ALTO_FILA, ETIQUETAS[campo])
-        pdf.set_font("Helvetica", "", 11)
-        pdf.multi_cell(0, ALTO_FILA, valor, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    # Un recuadro simple alrededor de los datos: presentación propia, nada del diseño oficial.
-    pdf.rect(pdf.l_margin - 4, arriba - 4, pdf.epw + 8, pdf.get_y() - arriba + 8)
-    return bytes(pdf.output()), valores
+    filas = [(ETIQUETAS[campo], valor) for campo, valor in valores.items()]
+    return fichas.render_ficha(TITULO, "Ficha de identidad", filas), valores
 
 
 def generate_dni_doc(
@@ -180,29 +160,32 @@ def generate_dni_doc(
     return pdf, dni.model_copy(update=update)
 
 
-def referencia_legajo(contrato: Contrato) -> date:
-    """Fecha que hace de "hoy" en los documentos del legajo: la de firma del contrato limpio."""
-    # El contrato limpio siempre tiene fecha de firma (el caso de fecha en blanco va aparte).
-    return contrato.fecha_firma or contrato.fecha_inicio
-
-
 def fuente_dni(seed: int, persona_id: UUID) -> Source:
-    """Sub-fuente del DNI de una parte. Otro documento del legajo que necesite sus datos
-    (ej. la fecha de nacimiento en el recibo) los recalcula con `generate_dni_data` y esta
-    misma fuente, sin renderizar la ficha."""
+    """Sub-fuente del DNI de una parte."""
     return Source(seed).derive(f"dni:{persona_id}")
 
 
-def generate_dnis(seed: int) -> dict[UUID, tuple[bytes, DNI]]:
-    """Ficha de DNI de cada parte del contrato de la semilla (por `Persona.id`).
+def dni_de(contexto: ContextoLegajo, persona_id: UUID) -> DNI:
+    """Datos del DNI de una parte, sin renderizar la ficha: para otros documentos del legajo
+    que los necesitan (ej. la fecha de nacimiento en el recibo o en el título)."""
+    identidad = contexto.identidades[persona_id]
+    return generate_dni_data(identidad, contexto.referencia, fuente_dni(contexto.seed, persona_id))
 
-    Sale de las identidades del contrato limpio: aunque el contrato no muestre el DNI de
-    una parte (caso PERSONA_SIN_DOCUMENTO), su ficha sí lo trae. Cada parte usa su propia
+
+def generate_dnis(
+    seed: int, casos: list[CasoDificil] | None = None
+) -> dict[UUID, tuple[bytes, DNI]]:
+    """Ficha de DNI de cada parte que firma el contrato de la semilla (por `Persona.id`).
+
+    Los datos salen de las identidades del contrato limpio: aunque el contrato no muestre el
+    DNI de una parte (caso PERSONA_SIN_DOCUMENTO), su ficha sí lo trae. Con el caso
+    SEGURO_DE_CAUCION no hay garantes, así que tampoco sus DNI. Cada parte usa su propia
     sub-fuente, así sumar un garante no cambia el DNI de los demás.
     """
-    contrato, identidades = generate_contrato_con_identidades(seed)
-    referencia = referencia_legajo(contrato)
+    contexto = contexto_legajo(seed, casos)
     return {
-        persona_id: generate_dni_doc(identidad, referencia, fuente_dni(seed, persona_id))
-        for persona_id, identidad in identidades.items()
+        p.id: generate_dni_doc(
+            contexto.identidades[p.id], contexto.referencia, fuente_dni(seed, p.id)
+        )
+        for p in contexto.partes()
     }

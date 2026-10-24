@@ -88,7 +88,7 @@ Pasos:
      cláusula más larga que una página.
    - 4c. Escaneo torcido: páginas como imagen, con rotación, ruido y aspecto de
      fotocopia, sin capa de texto.
-5. Documentos complementarios simples: DNI, recibo de sueldo, garantía y seguro. Sus
+5. ✅ Documentos complementarios simples: DNI, recibo de sueldo, garantía y seguro. Sus
    modelos pydantic se agregan a core, con evidencia por campo gemelo (como `Contrato`).
    Se generan como un legajo coherente con el contrato de la misma semilla, para poder
    evaluar cruces (¿el DNI coincide con el del contrato?). Sin imitar el diseño de

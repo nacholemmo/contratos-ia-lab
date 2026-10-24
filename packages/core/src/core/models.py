@@ -319,6 +319,102 @@ class ReciboSueldo(BaseModel):
         return v
 
 
+class TituloPropiedad(BaseModel):
+    """Título de propiedad de un garante (garantía propietaria), tal como figura.
+
+    Solo lo que Avisa usa para aceptar la garantía: de quién es, qué inmueble y cómo está
+    inscripto. Sin nomenclatura catastral, valuación ni datos del escribano (minimización).
+    """
+
+    titular: str = Field(
+        ..., min_length=1, description="Nombre del titular del inmueble tal como figura"
+    )
+    inmueble: str = Field(
+        ..., min_length=1, description="Dirección del inmueble tal como figura en el título"
+    )
+    titular_dni: str | None = Field(
+        None,
+        pattern=r"^\d{7,8}$",
+        description="DNI del titular, 7 u 8 dígitos sin puntos (ej. 30123456); null si no figura",
+    )
+    matricula: str | None = Field(
+        None,
+        description="Matrícula o inscripción registral tal como figura (ej. '123456/1'); "
+        "null si no figura",
+    )
+    fecha_escritura: date | None = Field(
+        None, description="Fecha de la escritura, AAAA-MM-DD; null si no figura"
+    )
+
+    titular_evidencia: Evidencia | None = None
+    inmueble_evidencia: Evidencia | None = None
+    titular_dni_evidencia: Evidencia | None = None
+    matricula_evidencia: Evidencia | None = None
+    fecha_escritura_evidencia: Evidencia | None = None
+
+
+class Poliza(BaseModel):
+    """Datos comunes de una póliza de seguro: quién la emite, su número y su vigencia."""
+
+    aseguradora: str = Field(
+        ..., min_length=1, description="Nombre de la aseguradora tal como figura"
+    )
+    numero_poliza: str | None = Field(
+        None, description="Número de póliza tal como figura, sin 'N°'; null si no figura"
+    )
+    vigencia_desde: date | None = Field(
+        None, description="Inicio de la vigencia, AAAA-MM-DD; null si no figura"
+    )
+    vigencia_hasta: date | None = Field(
+        None, description="Fin de la vigencia, AAAA-MM-DD; null si no figura"
+    )
+
+    aseguradora_evidencia: Evidencia | None = None
+    numero_poliza_evidencia: Evidencia | None = None
+    vigencia_desde_evidencia: Evidencia | None = None
+    vigencia_hasta_evidencia: Evidencia | None = None
+
+
+class PolizaCaucion(Poliza):
+    """Seguro de caución que garantiza el alquiler en lugar de una persona garante."""
+
+    tomador: str | None = Field(
+        None, description="Quien contrata la póliza (el inquilino), tal como figura"
+    )
+    asegurado: str | None = Field(
+        None, description="Beneficiario de la póliza (el locador), tal como figura"
+    )
+    suma_asegurada: Monto | None = Field(
+        None, description="Suma asegurada, en la moneda de `moneda`; null si no figura"
+    )
+    moneda: Moneda | None = Field(
+        None, description="Moneda de la suma asegurada: ARS o USD; null si no figura"
+    )
+
+    tomador_evidencia: Evidencia | None = None
+    asegurado_evidencia: Evidencia | None = None
+    suma_asegurada_evidencia: Evidencia | None = None
+    moneda_evidencia: Evidencia | None = None
+
+
+class SeguroInmueble(Poliza):
+    """Seguro del inmueble alquilado (incendio), que contrata el inquilino."""
+
+    asegurado: str | None = Field(
+        None, description="Titular de la póliza tal como figura; null si no figura"
+    )
+    ubicacion_riesgo: str | None = Field(
+        None, description="Dirección del inmueble asegurado tal como figura; null si no figura"
+    )
+    suma_asegurada: Monto | None = Field(
+        None, description="Suma asegurada contra incendio, en pesos; null si no figura"
+    )
+
+    asegurado_evidencia: Evidencia | None = None
+    ubicacion_riesgo_evidencia: Evidencia | None = None
+    suma_asegurada_evidencia: Evidencia | None = None
+
+
 class TipoDocumento(StrEnum):
     """Tipo de archivo que entra al sistema; lo decide el clasificador de la Fase 3."""
 
@@ -357,12 +453,16 @@ __all__ = [
     "Moneda",
     "Monto",
     "Persona",
+    "Poliza",
+    "PolizaCaucion",
     "Propiedad",
     "ReciboSueldo",
     "RegimenLegal",
     "Rol",
+    "SeguroInmueble",
     "Sexo",
     "TipoDocumento",
     "TipoPropiedad",
+    "TituloPropiedad",
     "cuit_valido",
 ]

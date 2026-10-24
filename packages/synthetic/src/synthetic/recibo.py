@@ -14,13 +14,11 @@ from fpdf.enums import XPos, YPos
 
 from core.models import Contrato, Evidencia, Moneda, ReciboSueldo, Rol
 from synthetic.amounts import numero_ar
-from synthetic.contracts import (
-    ALQUILER_ARS_POR_ANIO,
-    Identidad,
-    generate_contrato_con_identidades,
-)
-from synthetic.dni import fuente_dni, generate_dni_data, referencia_legajo, sumar_anios
+from synthetic.cases import CasoDificil
+from synthetic.contracts import ALQUILER_ARS_POR_ANIO
+from synthetic.dni import dni_de, sumar_anios
 from synthetic.identity import cuit_empresa, cuit_from_dni
+from synthetic.legajo import ContextoLegajo, contexto_legajo
 from synthetic.pdf import ContratoPDF, marcar_sintetico
 from synthetic.source import Source
 from synthetic.wording import MESES
@@ -68,7 +66,8 @@ def alquiler_en_pesos(contrato: Contrato) -> Decimal:
     año: el recibo es en pesos y no queremos una cotización inventada."""
     if contrato.moneda == Moneda.ARS:
         return contrato.monto_inicial
-    minimo, maximo = ALQUILER_ARS_POR_ANIO[referencia_legajo(contrato).year]
+    anio = (contrato.fecha_firma or contrato.fecha_inicio).year
+    minimo, maximo = ALQUILER_ARS_POR_ANIO[anio]
     return Decimal((minimo + maximo) // 2)
 
 
@@ -95,17 +94,17 @@ def fecha_ingreso(nacimiento: date, periodo: date, source: Source) -> date:
 
 
 def generate_recibo_data(
-    seed: int, identidad: Identidad, contrato: Contrato, source: Source
+    contexto: ContextoLegajo, persona_id: UUID, source: Source
 ) -> tuple[ReciboSueldo, list[Decimal]]:
     """Datos del recibo (sin evidencia) y el detalle de aportes para imprimir."""
+    identidad = contexto.identidades[persona_id]
     persona = identidad.persona
     if persona.dni is None:
         raise ValueError(f"la parte {persona.id} no tiene DNI en la identidad")
-    referencia = referencia_legajo(contrato)
     # La misma fecha de nacimiento que su ficha de DNI: el legajo es coherente.
-    dni = generate_dni_data(identidad, referencia, fuente_dni(seed, persona.id))
-    periodo = periodo_liquidado(referencia)
-    bruto, aportes, neto = montos(alquiler_en_pesos(contrato), source)
+    dni = dni_de(contexto, persona_id)
+    periodo = periodo_liquidado(contexto.referencia)
+    bruto, aportes, neto = montos(alquiler_en_pesos(contexto.limpio), source)
     recibo = ReciboSueldo(
         empleador=source.rng.choice(EMPLEADORES),
         empleador_cuit=cuit_empresa(source.rng),
@@ -207,22 +206,21 @@ def render_recibo(
 
 
 def generate_recibo_doc(
-    seed: int, identidad: Identidad, contrato: Contrato, source: Source
+    contexto: ContextoLegajo, persona_id: UUID, source: Source
 ) -> tuple[bytes, ReciboSueldo]:
     """PDF del recibo y su ground truth con evidencia (todo en la página 1)."""
-    recibo, aportes = generate_recibo_data(seed, identidad, contrato, source)
+    recibo, aportes = generate_recibo_data(contexto, persona_id, source)
     pdf, valores = render_recibo(recibo, aportes, source)
     update = {f"{c}_evidencia": Evidencia(texto=t, pagina=1) for c, t in valores.items()}
     return pdf, recibo.model_copy(update=update)
 
 
-def generate_recibos(seed: int) -> dict[UUID, tuple[bytes, ReciboSueldo]]:
+def generate_recibos(
+    seed: int, casos: list[CasoDificil] | None = None
+) -> dict[UUID, tuple[bytes, ReciboSueldo]]:
     """Recibo de sueldo de cada inquilino del contrato de la semilla (por `Persona.id`)."""
-    contrato, identidades = generate_contrato_con_identidades(seed)
+    contexto = contexto_legajo(seed, casos)
     return {
-        p.id: generate_recibo_doc(
-            seed, identidades[p.id], contrato, Source(seed).derive(f"recibo:{p.id}")
-        )
-        for p in contrato.partes
-        if p.rol == Rol.INQUILINO
+        p.id: generate_recibo_doc(contexto, p.id, Source(seed).derive(f"recibo:{p.id}"))
+        for p in contexto.partes(Rol.INQUILINO)
     }
