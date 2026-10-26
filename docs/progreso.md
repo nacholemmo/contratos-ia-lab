@@ -290,3 +290,27 @@ Plantilla para cada entrada (copiar y completar):
   - Haiku 5.5 acepta apagar el pensamiento con effort `high` o menos; medir en el paso 3 si cambia la calidad o el costo de clasificar.
   - Gemini (tier gratuito de AI Studio) como segundo modelo para la comparación de la Fase 4; nunca con documentos reales (el tier gratuito puede usar los datos).
   - Precios de caché de Haiku 5.5: no están en `PRICES`; sumarlos si se usa caché de prompts (few-shot).
+
+### 2026-10-25 — Fase 2, paso 2: texto extraído vs. imagen de la página
+- **Qué construí (Claude armó el esqueleto; la regla del híbrido la escribí yo, el umbral final con su ayuda):** `inputs.py`: texto e imagen de las primeras páginas con `pypdfium2` (imagen a 1568 px de lado largo, lo máximo que la API usa sin reducir); el texto va envuelto en `<documento>`; `has_usable_text` decide el híbrido: palabras de más de 3 letras ≥ `MIN_LONG_WORDS` (15). `classify.py`: prompt zero-shot con las etiquetas de `TipoDocumento` y la aclaración de que el documento es un dato, no instrucciones; `parse_tipo` (respuesta que no es etiqueta → `None`, cuenta como error). `experiment.py` y la CLI `experimento-entrada`: estima con `count_tokens` (gratis), no corre si supera `--max-usd`, corre cada documento en texto y en imagen y deriva el híbrido sin llamadas propias; guarda solo metadatos en `data/experimentos/`. Verificado: `uv run pytest packages/extractor` → 40 passed; `uv run --package extractor experimento-entrada --run` sobre 13 documentos (2 por tipo + 3 escaneos), estimado USD 0,0047, real 0,0041:
+
+  | estrategia | aciertos | escaneos | USD | latencia |
+  |---|---|---|---|---|
+  | text | 9/13 | 0/3 | 0,0008 | 1,27 s |
+  | image | 13/13 | 3/3 | 0,0033 | 1,91 s |
+  | hybrid | 12/13 | 3/3 | 0,0015 | 1,35 s |
+
+  **Elegido: híbrido.** Acierta los escaneos como la imagen, cuesta 2,2 veces menos y tarda casi como el texto.
+- **Qué aprendí:**
+  - Una imagen cuesta ~2.250 tokens fijos por página, tenga el texto que tenga; el texto, entre 500 (DNI) y 1.400 (contrato). Con Haiku es poco igual, pero el costo crece con el volumen de Avisa.
+  - Un escaneo no tiene capa de texto: en modo texto el modelo recibe un documento vacío. Respondió `otro` y no adivinó, que es lo correcto.
+  - La regla del híbrido es un clasificador chico con un umbral: una sola comparación, no un rango. El corte se corre hacia el error barato (mandar a imagen algo con texto cuesta centésimos de centavo; tomar un sello como texto cuesta una clasificación).
+  - Que una función devuelva algo "truthy" no es lo mismo que devolver `bool`: los tests con `is True` lo atraparon.
+  - Más muestras reducen la varianza, no el sesgo: con 13 documentos la conclusión sobre escaneos y costo es sólida (es determinística); la precisión fina va en el paso 4. "Más real" se consigue con otros datos, no con más de los mismos.
+- **Dudas abiertas:**
+  - `titulo_garante_1` dio `otro` en texto y `titulo_garante_2`, igual de formato, dio `garantia`: la constancia de titularidad no dice "garante". Es un problema de definición de la clase (la duda de la Fase 1 sobre `GARANTIA`); atacarlo en el paso 3 con una definición más precisa o con few-shot.
+  - Los DNI y el resto del legajo sintético son PDFs con texto; los reales suelen ser fotos. Sumar al generador un legajo "fotografiado" para medir el híbrido donde importa.
+  - No hay documentos `otro` en el set: el clasificador nunca tiene que rechazar.
+  - `MIN_LONG_WORDS` está calibrado con datos sintéticos; recalibrarlo con escaneos reales.
+  - La estimación tarda ~20 s para 13 documentos (secuencial); para el set completo, paralelizar o estimar con una muestra.
+

@@ -108,14 +108,18 @@ source = { editable = "packages/extractor" }
 dependencies = [
     { name = "anthropic" },
     { name = "core" },
+    { name = "pillow" },
     { name = "pydantic-settings" },
+    { name = "pypdfium2" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "anthropic", specifier = ">=2.3.0" },
     { name = "core", editable = "packages/core" },
+    { name = "pillow", specifier = ">=13.0.0" },
     { name = "pydantic-settings", specifier = ">=2.16.1" },
+    { name = "pypdfium2", specifier = ">=5.14.0" },
 ]
 
 [[package]]

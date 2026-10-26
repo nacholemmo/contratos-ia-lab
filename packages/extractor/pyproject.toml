@@ -10,11 +10,14 @@ requires-python = ">=3.12"
 dependencies = [
     "anthropic>=2.3.0",
     "core",
+    "pillow>=13.0.0",
     "pydantic-settings>=2.16.1",
+    "pypdfium2>=5.14.0",
 ]
 
 [project.scripts]
 llm-ping = "extractor.cli:main"
+experimento-entrada = "extractor.cli:experimento_entrada"
 
 [build-system]
 requires = ["uv_build>=0.13.5,<0.14.0"]
