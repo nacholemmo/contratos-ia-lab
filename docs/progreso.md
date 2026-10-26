@@ -8,8 +8,8 @@ Registro de cada paso o fase cerrada. Lo actualiza Claude al cerrar un paso y `/
 | Fase | Estado | Inicio | Cierre |
 |------|--------|--------|--------|
 | 0 — Setup del laboratorio | cerrada | 2026-10-12 | 2026-10-17 |
-| 1 — Generador sintético | en curso | 2026-10-18 | |
-| 2 — Clasificación de documentos | pendiente | | |
+| 1 — Generador sintético | cerrada | 2026-10-18 | 2026-10-24 |
+| 2 — Clasificación de documentos | en curso | 2026-10-25 | |
 | 3 — Extracción por tipo de documento, con evidencia | pendiente | | |
 | 4 — Evaluaciones contra el generador | pendiente | | |
 | 5 — RAG sobre normativa | pendiente | | |
@@ -276,3 +276,17 @@ Plantilla para cada entrada (copiar y completar):
   - Fase 3: el número de DNI no está correlacionado con la edad; los escalones del canon y el tipo de garantía no tienen campo en `Contrato`.
   - Fase 4: comparador de nombres normalizado (mayúsculas, tildes, orden nombre/apellido); reportar sorteado y forzado por separado; si el escaneo da casi la misma precisión que el texto, sumar un nivel fuerte.
   - Pesos aproximados (años de firma, provincias, casos, alquileres nacionales): ajustarlos con los contratos reales de docs/validacion.md.
+
+### 2026-10-25 — Fase 2, paso 1: llamada mínima a la API con tokens, costo y latencia
+- **Qué construí:** paquete `packages/extractor` (`anthropic`, `pydantic-settings`, `core`). Modelo de trabajo: **Haiku 5.5** para toda la Fase 2 (saldo de USD 4,82, MVP). `settings.py`: la clave sale de `.env` como `SecretStr`; cliente con timeout de 30 s y 2 reintentos (los del SDK). `llm.py`, única puerta al LLM: `call_llm` manda `effort: "low"`, mide la latencia y devuelve el texto más un `LlmUsage` (modelo, tokens, costo, latencia, `stop_reason`, `request_id`); loguea solo esos metadatos; traduce los errores del SDK a `LlmError` y `LlmRefusal` y loguea solo el tipo de error; corta antes de llamar si el modelo no tiene precio en `PRICES`. `cost_usd` (lo escribí yo): `Decimal` exacto sin redondear, con la tarifa larga de Haiku (más de 100K tokens de entrada, toda la llamada ×5). CLI `llm-ping`. Verificado: `uv run pytest packages/extractor` → 13 passed; `uv run --package extractor llm-ping` → `in=25 out=4 cost_usd=0.0000045 latency=1.60s`; `uv run pytest packages/extractor -m network` → 1 passed.
+- **Qué aprendí:**
+  - Cada llamada a un LLM se mide con tres números: tokens, costo y latencia. Sin ellos no se pueden comparar los enfoques de la Fase 2 ni saber si el servicio es viable para Avisa.
+  - El costo es dinero: `Decimal` y una sola división al final. Redondear a centavos daría 0 (una llamada cuesta fracciones de centavo).
+  - Primero elegir la tarifa y después calcular una sola vez. El test de borde (100.001 tokens) es el que atrapó que faltaba la tarifa larga.
+  - "Sin estado" también en los errores: el mensaje de un error de la API puede citar el documento, así que se loguea solo su tipo.
+  - Una suscripción (Google AI Plus, Claude.ai) no da crédito de API: el servicio se paga por token.
+- **Dudas abiertas:**
+  - `Price` permite un umbral sin tarifas largas; validarlo en `__post_init__` si se suman modelos.
+  - Haiku 5.5 acepta apagar el pensamiento con effort `high` o menos; medir en el paso 3 si cambia la calidad o el costo de clasificar.
+  - Gemini (tier gratuito de AI Studio) como segundo modelo para la comparación de la Fase 4; nunca con documentos reales (el tier gratuito puede usar los datos).
+  - Precios de caché de Haiku 5.5: no están en `PRICES`; sumarlos si se usa caché de prompts (few-shot).
