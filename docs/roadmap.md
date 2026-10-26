@@ -133,8 +133,16 @@ Pasos:
 5. Extractores para DNI, recibo de sueldo, garantía y seguro, elegidos según el tipo de la Fase 2.
 6. Defensa contra prompt injection: el documento va como dato delimitado, nunca como
    instrucción; casos sintéticos con instrucciones escondidas.
+7. Documentos fotografiados (sobre todo el DNI, que en la realidad llega como foto del
+   celular):
+   - En el generador, un legajo "fotografiado": foto de la ficha sintética con perspectiva,
+     brillo, sombra, desenfoque y fondo. Nunca imitando el diseño oficial del DNI.
+   - En el extractor, aceptar JPG, PNG y HEIC además de PDF: convertir HEIC, enderezar según
+     EXIF, reducir a 1568 px de lado largo y juntar frente y dorso.
+   - Medir cuánto pierde la extracción con foto respecto del PDF. Una foto no tiene capa de
+     texto: la evidencia del paso 3 no se puede verificar contra el texto de la página.
 Terminado cuando: `extract(documento)` devuelve tipo, campos, evidencia y advertencias
-para los 5 tipos, con tests sobre documentos sintéticos.
+para los 5 tipos, en PDF y en foto, con tests sobre documentos sintéticos.
 
 ## Fase 4 — Evaluaciones contra el generador (packages/evals)
 Objetivo: saber cuán bien extrae el servicio, campo por campo, y detectar regresiones.
