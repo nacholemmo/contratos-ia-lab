@@ -74,6 +74,19 @@ def load_samples(root: Path, per_type: int) -> list[Sample]:
     return samples
 
 
+def load_all_samples(root: Path) -> list[Sample]:
+    """Todos los documentos del set, sorteado y forzado, para los enfoques que no cuestan."""
+    samples: list[Sample] = []
+    for legajo_path in sorted(root.rglob("legajo.json")):
+        legajo = json.loads(legajo_path.read_text())
+        escaneado = "escaneo_torcido" in legajo["casos"]
+        for doc in legajo["documentos"]:
+            tipo = TipoDocumento(doc["tipo"])
+            scanned = tipo == TipoDocumento.CONTRATO and escaneado
+            samples.append(Sample(legajo_path.parent / doc["pdf"], tipo, scanned))
+    return samples
+
+
 def estimate_usd(client: anthropic.Anthropic, samples: list[Sample], model: str) -> Decimal:
     """Costo estimado de correr todos los modos, con `count_tokens` (gratis)."""
     total = Decimal(0)

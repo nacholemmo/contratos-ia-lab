@@ -3,22 +3,34 @@
 - `llm-ping`: una llamada de prueba al LLM para ver tokens, costo y latencia.
 - `experimento-entrada`: paso 2 de la Fase 2, texto vs. imagen vs. híbrido. Sin `--run` solo
   estima el costo (con `count_tokens`, gratis).
+- `clasificar-reglas`: paso 3 de la Fase 2, el enfoque por reglas sobre todo el set (gratis).
 
 Uso (desde la raíz):
   uv run --package extractor llm-ping
   uv run --package extractor experimento-entrada            # solo estima
   uv run --package extractor experimento-entrada --run      # corre si no supera --max-usd
+  uv run --package extractor clasificar-reglas
 """
 
 import argparse
 import json
 import logging
+from collections import Counter
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
-from extractor.experiment import estimate_usd, load_samples, run, summarize_all
+from core.models import TipoDocumento
+from extractor.experiment import (
+    estimate_usd,
+    load_all_samples,
+    load_samples,
+    run,
+    summarize_all,
+)
+from extractor.inputs import page_texts
 from extractor.llm import call_llm
+from extractor.rules import classify_by_rules
 from extractor.settings import Settings, make_client
 
 
@@ -98,6 +110,39 @@ def experimento_entrada(argv: list[str] | None = None) -> int:
         )
     )
     print(f"\nresultados (solo metadatos): {out}")
+    return 0
+
+
+def clasificar_reglas(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="clasificar-reglas",
+        description="Clasifica todo el set con reglas (sin LLM, gratis) y muestra los errores.",
+    )
+    parser.add_argument("--data", type=Path, default=Path("data/synthetic"))
+    args = parser.parse_args(argv)
+
+    samples = load_all_samples(args.data)
+    totals: Counter[TipoDocumento] = Counter()
+    hits: Counter[TipoDocumento] = Counter()
+    errors: list[str] = []
+    for sample in samples:
+        predicted = classify_by_rules(page_texts(sample.pdf.read_bytes()))
+        totals[sample.tipo] += 1
+        if predicted == sample.tipo:
+            hits[sample.tipo] += 1
+        else:
+            pdf = sample.pdf.relative_to(args.data)
+            errors.append(f"{pdf}: {sample.tipo.value} → {predicted.value}")
+
+    print(f"{'tipo':<14} {'aciertos':>12}")
+    for tipo in TipoDocumento:
+        if totals[tipo]:
+            print(f"{tipo.value:<14} {hits[tipo]:>5}/{totals[tipo]:<6}")
+    total_hits, total = sum(hits.values()), sum(totals.values())
+    print(f"{'total':<14} {total_hits:>5}/{total:<6} ({total_hits / total:.1%})")
+    print(f"\n{len(errors)} errores")
+    for error in errors:
+        print(f"  {error}")
     return 0
 
 
