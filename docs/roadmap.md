@@ -1,54 +1,68 @@
 # Roadmap — contratos-ia-lab
 
-Alcance desde el 2026-10-18: este repo es el **servicio de IA sin estado** del módulo
-Alquileres de Avisa. Hace dos cosas: genera contratos sintéticos y extrae datos de
-documentos. Avisa es la única fuente de verdad: guarda inmobiliarias, contratos,
-personas y propiedades, hace la revisión humana, calcula aumentos y vencimientos y
-manda los avisos.
+Alcance desde el 2026-11-07 ([ADR 0001](adr/0001-reenfoque-a-legajos.md)): este repo es el
+**servicio de IA sin estado que arma legajos de alquiler a partir de fotos**. Entran fotos o
+PDFs desordenados (DNI en frente y dorso, recibos, garantías y, al cierre, contrato y
+seguro) y sale un **legajo sugerido**: documentos agrupados y asignados a cada persona y
+rol, datos con evidencia, faltantes según los requisitos y alertas de cruces. Una persona
+lo confirma en Avisa, y lo confirmado se exporta en un formato versionado que puede
+importar otro sistema.
 
-Ajuste del 2026-10-22: el roadmap se alinea con el path de carrera (AI Engineer / FDE).
-La interfaz con Avisa es un **servidor MCP propio** (no una API REST), y se suman, como
-paquetes aparte que consumen el servicio, un RAG sobre normativa y un agente con LangGraph.
-El repo es público.
+Historia del alcance: el 2026-10-18, servicio de IA del módulo Alquileres de Avisa
+(contratos); el 2026-10-22, interfaz MCP, agente con LangGraph y repo público.
 
-Calendario: oct.–nov. Fases 1 a 3 · dic. Fase 4 · ene. Fase 5 · feb. Fases 6 y 7 · mar. Fase 8.
+Calendario: nov. Fases 2 y 3 · dic. Fases 4 y 5 · ene. Fase 6 · feb. Fases 7 y 8 ·
+mar. Fases 9 y 10 · después, la fase opcional.
 
 Recursos: [Scrimba] = AI Engineer Path de Scrimba · [Path] = Path autodidacta: AI Engineer.
 
+## El legajo en dos etapas
+- **Etapa 1, evaluación** (antes de firmar): DNI, recibos de sueldo y garantía (título o
+  caución) del inquilino y de los garantes. La inmobiliaria manda el alquiler propuesto y
+  el servicio calcula la relación alquiler/ingresos. **Es la prioridad.**
+- **Etapa 2, cierre:** se suman el contrato y el seguro, cruzados contra el legajo.
+El motor es el mismo para las dos; cambian los requisitos y los cruces.
+
 ## Principios del servicio
-- **Sin estado:** no guarda documentos ni su contenido, tampoco en logs. Entra un
-  documento, sale una respuesta, y no queda nada.
-- **Datos sugeridos:** todo lo extraído es una sugerencia con evidencia (fragmento y
+- **Sin estado:** no guarda documentos ni su contenido, tampoco en logs. Entran fotos, sale
+  un legajo sugerido, y no queda nada (tampoco lo que se bajó de una URL).
+- **Datos sugeridos:** todo lo extraído es una sugerencia con evidencia (fragmento, foto o
   página). La confirmación la hace una persona en Avisa.
 - **Documentos no confiables:** el texto de un documento es dato, nunca instrucción
   (prompt injection).
+- **Cruces y cuentas con código:** las alertas, los faltantes y la relación
+  alquiler/ingresos los calcula código determinístico sobre los datos extraídos. El LLM
+  extrae; no compara ni calcula.
+- **Referencias controladas:** los documentos llegan por ruta (dentro de una carpeta
+  permitida) o por URL firmada de un host permitido; nada más.
 - **Sintético y marcado:** el repo solo tiene datos sintéticos (Ley 25.326) y todo lo
   generado viene marcado como sintético.
-- **Determinismo donde se puede:** el generador no usa LLM; con la misma semilla sale
-  el mismo contrato.
+- **Determinismo donde se puede:** el generador no usa LLM; con la misma semilla sale el
+  mismo legajo.
 
 ## Fuera de este repo
-Base de datos, multi-tenant, usuarios y login, cálculo de aumentos y vencimientos,
-series de índices, avisos (email y WhatsApp) y pantalla de revisión: todo eso vive en
-Avisa. El fine-tuning también queda afuera por ahora.
+En Avisa: base de datos, multi-tenant, usuarios y login, y la revisión y confirmación del
+legajo. Fuera del producto (ADR 0001): aumentos, calendario de vencimientos, cartera,
+avisos, cobranza, liquidaciones y asistente sobre la cartera; si existen, serán otra app
+que importa el `LegajoExport`. El fine-tuning también queda afuera por ahora.
 
-RAG: no hace falta para extraer, porque un contrato entra entero en el contexto.
-- Sobre normativa: en este repo, como paquete aparte (Fase 5): corpus público e índice
-  de solo lectura, sin datos personales.
-- Sobre contratos: no se hace acá; los contratos viven en Avisa.
+RAG: no hace falta para extraer ni para armar el legajo, porque cada documento entra
+entero en el contexto. El RAG sobre normativa queda como fase opcional al final.
 
 ## Paquetes
-- `packages/core` — modelos pydantic: esquemas de salida de la extracción y ground
-  truth del generador.
-- `packages/synthetic` — generador de contratos y documentos sintéticos.
-- `packages/extractor` — clasificación y extracción.
+- `packages/core` — modelos pydantic: documentos, legajo sugerido, export y ground truth.
+- `packages/synthetic` — generador de legajos (en PDF y fotografiados) y de contratos.
+- `packages/extractor` — clasificación y extracción por documento.
+- `packages/legajo` — armado: calidad de foto, agrupación, asignación, cruces y checklist.
 - `packages/evals` — evaluaciones contra el generador.
-- `packages/normativa` — RAG sobre el Código Civil y el DNU 70/2023.
 - `packages/mcp` — servidor MCP: la interfaz para Avisa y para Claude.
 - `packages/agent` — agente con LangGraph, cliente del servidor MCP.
+- `packages/normativa` — RAG sobre el Código Civil y el DNU 70/2023 (opcional).
+- `schemas/` — JSON Schema publicados y versionados: `legajo.v1.json` (el sugerido) y
+  `legajo-export.v1.json` (el confirmado), con su documentación y ejemplos.
 
-`core`, `synthetic`, `extractor` y `evals` forman el servicio sin estado. `normativa` y
-`agent` lo consumen; el servicio no depende de ellos.
+`core`, `synthetic`, `extractor`, `legajo` y `evals` forman el servicio sin estado.
+`agent` y `normativa` lo consumen; el servicio no depende de ellos.
 
 ## Fase 0 — Setup del laboratorio ✅
 Objetivo: monorepo listo para trabajar.
@@ -107,6 +121,8 @@ contrato (mismos datos y mismo PDF).
 ## Fase 2 — Clasificación de documentos (packages/extractor)
 Objetivo: documento → tipo (contrato, DNI, recibo de sueldo, garantía, seguro u otro).
 Recursos: [Scrimba] Intro to AI Engineering + Multimodality · [Path] semana 2.
+Sin cambios por el reenfoque (ADR 0001): se cierra con el set de PDFs actual. La
+clasificación de fotos (con `otro` y el lado del DNI) se mide en las Fases 5 y 6.
 Conceptos: APIs de LLM, texto extraído vs. visión, tokens y costos, métricas de clasificación.
 Pasos:
 1. Llamada mínima a la API con el SDK oficial; registrar tokens, costo y latencia (sin
@@ -118,52 +134,216 @@ Pasos:
 Terminado cuando: hay una tabla comparativa de los 4 enfoques y un clasificador elegido
 con su justificación.
 
-## Fase 3 — Extracción por tipo de documento, con evidencia (packages/extractor)
-Objetivo: documento clasificado → campos de su modelo pydantic, evidencia por campo y advertencias.
-Conceptos: salidas estructuradas, validación y reintentos, documentos largos, ruteo por tipo, prompt injection.
-Pasos:
-1. Esquema de extracción derivado de los modelos de core, sin los campos internos (ids)
-   para que el LLM no los invente.
-2. Extracción estructurada de contratos con evidencia por campo; validación con
-   pydantic y reintento pasando el error al modelo.
-3. Verificación determinística de la evidencia: el fragmento tiene que aparecer en la
-   página indicada. Si no, el dato queda con una advertencia.
-4. Advertencias: dato sin evidencia, dato faltante, valores incoherentes (ej. depósito
-   en otra moneda que el alquiler).
-5. Extractores para DNI, recibo de sueldo, garantía y seguro, elegidos según el tipo de la Fase 2.
-6. Defensa contra prompt injection: el documento va como dato delimitado, nunca como
-   instrucción; casos sintéticos con instrucciones escondidas.
-7. Documentos fotografiados (sobre todo el DNI, que en la realidad llega como foto del
-   celular):
-   - En el generador, un legajo "fotografiado": foto de la ficha sintética con perspectiva,
-     brillo, sombra, desenfoque y fondo. Nunca imitando el diseño oficial del DNI.
-   - En el extractor, aceptar JPG, PNG y HEIC además de PDF: convertir HEIC, enderezar según
-     EXIF, reducir a 1568 px de lado largo y juntar frente y dorso.
-   - Medir cuánto pierde la extracción con foto respecto del PDF. Una foto no tiene capa de
-     texto: la evidencia del paso 3 no se puede verificar contra el texto de la página.
-Terminado cuando: `extract(documento)` devuelve tipo, campos, evidencia y advertencias
-para los 5 tipos, en PDF y en foto, con tests sobre documentos sintéticos.
 
-## Fase 4 — Evaluaciones contra el generador (packages/evals)
-Objetivo: saber cuán bien extrae el servicio, campo por campo, y detectar regresiones.
+## Fase 3 — Legajo fotografiado en el generador (packages/synthetic)
+Objetivo: `generate_legajo(seed, modo, etapa) -> (fotos, LegajoEsperado)` determinístico,
+con el desorden de la vida real y su ground truth.
+Conceptos: augmentación realista, ground truth de estructura (no solo de campos),
+inconsistencias inyectadas y etiquetadas, set sorteado y forzado.
+Pasos:
+1. Ground truth del legajo en core: `LegajoEsperado`, con la agrupación (foto →
+   documento), la asignación (documento → persona y rol), las fotos descartadas con su
+   motivo, los faltantes y las alertas esperadas.
+2. DNI en frente y dorso: dos fichas de presentación propia (el dorso con el domicilio y
+   los datos de emisión), sin imitar el diseño oficial ni su código de barras. La
+   evidencia indica la foto (el lado) donde está cada dato.
+3. Modo "legajo fotografiado": cada página como foto de celular, con perspectiva, sombra,
+   brillo desparejo, desenfoque, recorte de bordes y fondo. JPG con rotación EXIF y
+   nombres que no dicen nada (`IMG_4821.jpg`). Dos niveles (leve y fuerte) y alguna foto
+   ilegible a propósito. Reutiliza `scan.py` y `Source`.
+4. Modo "legajo sin contrato" (etapa 1): DNI de inquilinos y garantes, los últimos 3
+   recibos por inquilino (y recibos de garantes, como pasa en la realidad) y título o
+   caución. El alquiler propuesto sale del contrato de la semilla, que no se entrega. Modo
+   "cierre" (etapa 2): suma el contrato y el seguro.
+5. Desorden: fotos mezcladas (orden sorteado), duplicadas (la misma foto, o el mismo
+   documento sacado dos veces) e intrusas de clase `otro` (sintéticas: una factura de un
+   servicio, una captura de chat, una foto sin documento).
+6. Inconsistencias inyectadas y etiquetadas (`Inconsistencia`, como `CasoDificil`), cada
+   una con la alerta que el servicio debería levantar: recibo de otra persona, CUIL que no
+   corresponde al DNI, DNI vencido, recibo viejo, neto que no cierra, titular del título
+   que no es el garante, caución más corta que el plazo, ingreso insuficiente y documento
+   faltante. Set sorteado y set forzado por inconsistencia.
+7. CLI: `generate --modo fotografiado --etapa evaluacion`, con el manifest de casos e
+   inconsistencias.
+Terminado cuando: hay 50 legajos fotografiados de etapa 1 con su `LegajoEsperado` y un set
+forzado por inconsistencia; la misma semilla da los mismos bytes; un test verifica que
+cada inconsistencia inyectada tiene su alerta en el ground truth; y una muestra de fotos
+se revisó a ojo.
+
+## Fase 4 — Extracción de la etapa 1, con evidencia (packages/extractor)
+Objetivo: documento (una o más fotos, o un PDF) → campos de su modelo pydantic, evidencia
+por campo y advertencias, para DNI, recibo de sueldo y garantía.
+Conceptos: salidas estructuradas, validación y reintentos, entrada multimodal, ruteo por
+tipo, prompt injection.
+Pasos:
+1. Entrada de fotos: JPG, PNG y HEIC además de PDF; convertir HEIC, enderezar según EXIF y
+   reducir a 1568 px de lado largo. Un documento puede ser varias fotos (frente y dorso).
+2. Esquema de extracción derivado de los modelos de core, sin los campos internos (ids)
+   para que el LLM no los invente.
+3. Extracción estructurada del DNI (frente y dorso juntos) con evidencia por campo;
+   validación con pydantic y reintento pasando el error al modelo.
+4. Verificación determinística de la evidencia: en un PDF, el fragmento tiene que aparecer
+   en la página indicada; en una foto, sin capa de texto, decidir qué se verifica. Si no
+   se verifica, el dato queda con una advertencia.
+5. Extractores de recibo de sueldo y de garantía (título o caución: decidir el subtipo,
+   duda abierta de la Fase 1).
+6. Advertencias por documento: dato sin evidencia, dato faltante, valores incoherentes
+   (neto que no cierra).
+7. Defensa contra prompt injection: el documento va como dato delimitado, nunca como
+   instrucción; casos sintéticos con instrucciones escondidas.
+8. Medir cuánto pierde la extracción con foto respecto del PDF.
+Terminado cuando: `extract(documento)` devuelve tipo, campos, evidencia y advertencias
+para DNI, recibo y garantía, en PDF y en foto, con tests sobre documentos sintéticos.
+
+## Fase 5 — Armado del legajo (packages/legajo)
+Objetivo: `build_legajo(referencias, requisitos, etapa, alquiler_propuesto) -> Legajo`
+para la etapa 1, y el formato de export del legajo confirmado.
+Conceptos: pipelines de documentos, filtro por calidad antes del LLM, agrupación,
+resolución de entidades, reglas determinísticas, contratos de datos versionados.
+Pasos:
+1. Modelos en core: `Legajo`, `Etapa`, `Requisitos`, `Faltante` y `Alerta` (código,
+   severidad y la evidencia de los dos lados del cruce), con `schema_version`. JSON Schema
+   publicado en `schemas/legajo.v1.json`, para generar los tipos de Avisa.
+2. Calidad de foto con código (resolución, desenfoque y brillo) antes de gastar en el LLM:
+   las ilegibles salen como descartadas, con el pedido de otra foto.
+3. Clasificación por foto con el clasificador de la Fase 2, sumando `otro` y el lado del
+   DNI; duplicados por hash perceptual.
+4. Agrupación de fotos en documentos: frente con dorso y páginas de un título juntas;
+   recibos de meses distintos, separados.
+5. Asignación de cada documento a una persona y su rol, resolviendo entidades por DNI,
+   CUIL y nombre normalizado. Los casos dudosos quedan marcados; no se adivinan.
+6. Cruces determinísticos: una regla por alerta de la Fase 3, sobre los datos extraídos.
+   Relación alquiler/ingresos con `Decimal`.
+7. Checklist por requisitos: los requisitos llegan en cada llamada (sin estado) y salen
+   los faltantes por persona y rol.
+8. `LegajoExport`, separado del `Legajo` sugerido: solo datos confirmados, sin scores ni
+   alertas internas, con `schema_version` semver. Lo arma Avisa con lo confirmado (ADR 0001);
+   acá viven el modelo, el schema y el ejemplo. Publicado en
+   `schemas/legajo-export.v1.json`, documentado campo por campo
+   (`schemas/legajo-export.md`, generado desde las `description` para que no se
+   desactualice) y con un ejemplo generado desde una semilla sintética.
+9. Reglas de compatibilidad (`schemas/COMPATIBILIDAD.md`): parche si cambian solo las
+   descripciones; menor si se agrega un campo opcional; mayor si se renombra, se quita, se
+   cambia un tipo o un campo pasa a obligatorio. Una versión mayor es un archivo nuevo
+   (`v2.json`) y el anterior se mantiene. Test que falla si el schema generado difiere del
+   publicado sin subir la versión, y si una versión menor quita o vuelve obligatorio algo.
+Terminado cuando: `build_legajo` arma los 50 legajos fotografiados de etapa 1 de punta a
+punta; los dos schemas validan sus ejemplos; y el test de compatibilidad falla con un
+cambio de schema sin versión nueva.
+
+## Fase 6 — Evaluaciones contra el generador (packages/evals)
+Objetivo: saber cuán bien extrae y arma el servicio, y detectar regresiones.
 Recursos: [Path] semana 5.
-Conceptos: ground truth, métricas por campo, comparación normalizada, evals de regresión, tracing.
+Conceptos: ground truth, métricas por campo y de estructura, comparación normalizada,
+evals de regresión, tracing.
 Pasos:
 1. Comparadores por tipo de campo: exacto (CUIT, fechas), numérico (montos como
    Decimal), texto normalizado (nombres, direcciones).
-2. Precisión por campo y por tipo de documento, y desglose por caso difícil.
-3. Evaluación de la evidencia: ¿el fragmento y la página coinciden con los del generador?
-4. Robustez: tasa de éxito de los casos con prompt injection.
-5. Costo y latencia por documento; reporte en Markdown.
-6. Tracing con Langfuse: cada extracción deja su traza (llamadas, tokens, costo,
-   latencia), sin contenido de documentos reales.
-7. Comparar dos modelos o dos prompts sobre el mismo set y documentar cuál gana y por qué.
-8. Set chico de regresión que corre en CI.
-Terminado cuando: un comando genera el reporte de precisión por campo y por tipo, hay
-una comparación documentada de dos modelos o prompts y el set de regresión corre en CI.
+2. Precisión por campo y por tipo de documento, con desglose por caso difícil y por
+   calidad de foto. Set sorteado y forzado por separado.
+3. Evaluación de la evidencia: ¿el fragmento y la foto o página coinciden con los del
+   generador?
+4. Clasificación por foto (con `otro`) y calidad: F1 por clase, ilegibles y duplicadas
+   detectadas.
+5. Agrupación: ¿las fotos de cada documento quedaron juntas? (métrica a elegir) y tasa de
+   documentos perfectos.
+6. Asignación: % de documentos con la persona y el rol correctos, alineando las personas
+   sugeridas con las del ground truth.
+7. Faltantes y alertas: precisión y recall por código contra lo esperado, con desglose por
+   inconsistencia inyectada. Una alerta perdida cuesta más que una de más: reportar el
+   recall aparte.
+8. Robustez: tasa de éxito de los casos con prompt injection.
+9. Costo y latencia por legajo (no solo por documento); reporte en Markdown.
+10. Tracing con Langfuse: cada armado deja su traza (llamadas, tokens, costo, latencia),
+    sin contenido de documentos reales.
+11. Comparar dos modelos o dos prompts sobre el mismo set y documentar cuál gana y por qué.
+12. Set chico de regresión que corre en CI.
+Terminado cuando: un comando genera el reporte (campos, agrupación, asignación, faltantes,
+alertas y costo por legajo), hay una comparación documentada de dos modelos o prompts y el
+set de regresión corre en CI.
 
-## Fase 5 — RAG sobre normativa (packages/normativa)
-Objetivo: preguntas sobre la ley de alquileres respondidas con cita al artículo.
+## Fase 7 — Servidor MCP (packages/mcp)
+Objetivo: Avisa (y Claude) usan el servicio a través de un servidor MCP propio.
+Recursos: [Scrimba] Model Context Protocol · Anthropic Academy: Introduction to MCP.
+Conceptos: MCP (tools, esquemas, transportes), cliente vs. servidor, autenticación
+servicio a servicio, SSRF.
+Pasos:
+1. Servidor mínimo con una tool, probado desde Claude Code (transporte stdio).
+2. Referencias: `{ruta}` dentro de una carpeta permitida o `{url}` firmada. Solo https,
+   hosts permitidos desde `.env`, sin seguir redirecciones a otro host, sin IPs privadas,
+   con límite de tamaño y de cantidad, timeout y tipo de contenido. Un test por rechazo.
+3. Tool `extract_document(referencia)`: tipo, campos, evidencia y advertencias como datos
+   sugeridos, con `outputSchema` derivado de core.
+4. Tool `build_legajo(referencias, requisitos, etapa, alquiler_propuesto)`: el `Legajo`
+   sugerido, con `outputSchema` igual a `schemas/legajo.v1.json`.
+5. Tool `generate_synthetic_legajo(seed, modo, etapa)`: fotos y `LegajoEsperado`, marcados
+   como sintéticos.
+6. Transporte Streamable HTTP con token de servicio (comparación en tiempo constante,
+   desde `.env`).
+7. Sin estado: los documentos (también los bajados por URL) solo viven en memoria durante
+   la llamada; logs sin contenido. Tests que lo verifican.
+8. Cliente de prueba que simula a Avisa, y guía para conectarlo desde el backend NestJS,
+   con los tipos TypeScript generados desde `schemas/`.
+Terminado cuando: los tests del servidor pasan (auth, referencias rechazadas, armado,
+semilla reproducible, logs sin contenido) y las tres tools funcionan desde Claude Code y
+desde el cliente de prueba.
+
+## Fase 8 — Etapa 2: cierre con contrato y seguro
+Objetivo: el mismo `build_legajo` con `etapa=cierre`.
+Conceptos: documentos largos, cruces entre etapas.
+Pasos:
+1. Extracción del contrato (generador y ground truth ya hechos en la Fase 1) y del seguro.
+2. Cruces contra el legajo: partes del contrato contra personas del legajo (nombre y DNI),
+   alquiler del contrato contra el propuesto, garantía del contrato contra la del legajo, y
+   seguro con el inicio y la ubicación del contrato.
+3. Requisitos y faltantes del cierre.
+4. Métricas de la etapa 2 en el reporte de la Fase 6.
+Terminado cuando: `build_legajo(etapa=cierre)` arma los legajos de cierre sintéticos con
+sus alertas y el reporte de evals suma la etapa 2.
+
+## Fase 9 — Agente con LangGraph (packages/agent)
+Objetivo: resolver con un agente solo lo que el armado determinístico deja ambiguo: la
+agrupación y la asignación.
+Recursos: [Scrimba] Agents, Context Engineering · [Path] semana 4.
+Conceptos: orquestación con estado, herramientas acotadas, human-in-the-loop, agentes
+como clientes MCP.
+Alcance: el agente no extrae desde cero ni decide cruces, faltantes o la relación
+alquiler/ingresos (eso sigue en código). Interviene cuando la Fase 5 marca una duda: un
+dorso sin frente, dos personas con el mismo apellido, un recibo con el nombre abreviado o
+un título con dos titulares.
+Pasos:
+1. Grafo mínimo en LangGraph con estado tipado.
+2. Herramientas vía MCP: ver una foto, volver a extraer un documento, proponer un
+   reagrupamiento o una asignación.
+3. Si la evidencia no alcanza para resolver la duda, la deja para la persona
+   (human-in-the-loop) con la pregunta concreta.
+4. Set forzado de legajos ambiguos en el generador.
+5. Evals: ¿mejora la agrupación y la asignación sobre el set ambiguo respecto del armado
+   sin agente? ¿Con cuántos pasos y a qué costo?
+Terminado cuando: el agente procesa el set ambiguo de punta a punta, con pausa de revisión
+en los casos que no resuelve, y un reporte compara agrupación, asignación, pasos y costo
+con y sin agente.
+
+## Fase 10 — Deploy y LLMOps
+Objetivo: el servidor MCP corre en un entorno al que solo llega Avisa, con costos y calidad a la vista.
+Recursos: [Scrimba] Deployment · [Path] semana 7.
+Conceptos: contenedores, secretos, red privada, versionado de prompts, evals en CI, observabilidad sin datos personales.
+Pasos:
+1. Imagen Docker reproducible a partir del workspace de uv.
+2. Secretos (token de servicio, API key del LLM, hosts permitidos) fuera de la imagen.
+3. Red privada: el servicio no queda expuesto al público.
+4. CI/CD que corre los tests, el test de compatibilidad de schemas y el set de regresión
+   de evals en cada cambio.
+5. Versionado de prompts y modelos: cada legajo registra con qué versión se armó.
+6. Healthcheck y métricas (costo y latencia por legajo, errores) sin contenido de documentos.
+7. Prueba de punta a punta desde el cliente que simula a Avisa, y post técnico con las
+   decisiones y los números.
+Terminado cuando: el servicio está desplegado, un armado de punta a punta funciona con un
+legajo sintético y el costo y la latencia por legajo están a la vista.
+
+## Fase opcional — RAG sobre normativa (packages/normativa)
+Fuera del producto (ADR 0001): para aprender y para el portfolio, si queda tiempo. El
+servicio no depende de esta fase y `search_normativa` no es parte del MCP del producto.
 Recursos: [Scrimba] Embeddings and Vector Databases · [Path] semana 3.
 Conceptos: chunking, embeddings, búsqueda vectorial, búsqueda híbrida, reranking, citas.
 Pasos:
@@ -177,51 +357,3 @@ Pasos:
    midiendo cuánto mejora cada técnica.
 Terminado cuando: hay una tabla con la mejora de vectorial → híbrida → reranking sobre el
 set de preguntas, y cada respuesta cita su artículo.
-
-## Fase 6 — Servidor MCP (packages/mcp)
-Objetivo: Avisa (y Claude) usan el servicio a través de un servidor MCP propio.
-Recursos: [Scrimba] Model Context Protocol · Anthropic Academy: Introduction to MCP.
-Conceptos: MCP (tools, esquemas, transportes), cliente vs. servidor, autenticación servicio a servicio.
-Pasos:
-1. Servidor mínimo con una tool, probado desde Claude Code (transporte stdio).
-2. Tool `extract_document`: recibe PDF o imagen (base64, con límite de tamaño); devuelve
-   tipo, campos, evidencia y advertencias como datos sugeridos, con `outputSchema`
-   derivado de los modelos de core.
-3. Tool `generate_synthetic_contract`: semilla opcional; devuelve el PDF y sus datos
-   correctos, marcados como sintéticos.
-4. Tool `search_normativa`: consulta el RAG de la Fase 5 con cita al artículo.
-5. Transporte Streamable HTTP con token de servicio (comparación en tiempo constante, desde `.env`).
-6. Sin estado: el documento solo vive en memoria durante la llamada; logs sin contenido.
-   Tests que lo verifican.
-7. Cliente de prueba que simula a Avisa (y guía para conectarlo desde el backend NestJS).
-Terminado cuando: los tests del servidor pasan (auth, extracción, semilla reproducible,
-logs sin contenido) y las tres tools funcionan desde Claude Code y desde el cliente de prueba.
-
-## Fase 7 — Agente con LangGraph (packages/agent)
-Objetivo: un flujo multi-agente con estado que usa las tools del servidor MCP.
-Recursos: [Scrimba] Agents, Context Engineering · [Path] semana 4.
-Conceptos: orquestación con estado, supervisor/worker, human-in-the-loop, agentes como clientes MCP.
-Pasos:
-1. Grafo mínimo en LangGraph con estado tipado.
-2. Workers: clasificador, extractor y consultor de normativa, cada uno vía MCP.
-3. Supervisor que decide el siguiente paso según el tipo de documento y las advertencias.
-4. Human-in-the-loop: los casos dudosos se pausan para revisión y siguen con la respuesta.
-5. Evals del agente sobre el set sintético (¿llega al resultado correcto? ¿cuántos pasos y cuánto cuesta?).
-Terminado cuando: el agente procesa un lote sintético de punta a punta, con pausa de
-revisión en los casos dudosos y un reporte de precisión, pasos y costo.
-
-## Fase 8 — Deploy y LLMOps
-Objetivo: el servidor MCP corre en un entorno al que solo llega Avisa, con costos y calidad a la vista.
-Recursos: [Scrimba] Deployment · [Path] semana 7.
-Conceptos: contenedores, secretos, red privada, versionado de prompts, evals en CI, observabilidad sin datos personales.
-Pasos:
-1. Imagen Docker reproducible a partir del workspace de uv.
-2. Secretos (token de servicio, API key del LLM) fuera de la imagen.
-3. Red privada: el servicio no queda expuesto al público.
-4. CI/CD que corre los tests y el set de regresión de evals en cada cambio.
-5. Versionado de prompts y modelos: cada extracción registra con qué versión se hizo.
-6. Healthcheck y métricas (costo y latencia por contrato, errores) sin contenido de documentos.
-7. Prueba de punta a punta desde el cliente que simula a Avisa, y post técnico con las
-   decisiones y los números.
-Terminado cuando: el servicio está desplegado, una extracción de punta a punta funciona
-con un documento sintético y el costo y la latencia por contrato están a la vista.

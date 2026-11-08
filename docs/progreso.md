@@ -10,12 +10,17 @@ Registro de cada paso o fase cerrada. Lo actualiza Claude al cerrar un paso y `/
 | 0 — Setup del laboratorio | cerrada | 2026-10-12 | 2026-10-17 |
 | 1 — Generador sintético | cerrada | 2026-10-18 | 2026-10-24 |
 | 2 — Clasificación de documentos | en curso | 2026-10-25 | |
-| 3 — Extracción por tipo de documento, con evidencia | pendiente | | |
-| 4 — Evaluaciones contra el generador | pendiente | | |
-| 5 — RAG sobre normativa | pendiente | | |
-| 6 — Servidor MCP | pendiente | | |
-| 7 — Agente con LangGraph | pendiente | | |
-| 8 — Deploy y LLMOps | pendiente | | |
+| 3 — Legajo fotografiado en el generador | pendiente | | |
+| 4 — Extracción de la etapa 1, con evidencia | pendiente | | |
+| 5 — Armado del legajo | pendiente | | |
+| 6 — Evaluaciones contra el generador | pendiente | | |
+| 7 — Servidor MCP | pendiente | | |
+| 8 — Etapa 2: cierre con contrato y seguro | pendiente | | |
+| 9 — Agente con LangGraph | pendiente | | |
+| 10 — Deploy y LLMOps | pendiente | | |
+| Opcional — RAG sobre normativa | pendiente | | |
+
+Las fases se renumeraron el 2026-11-07 (ADR 0001); las entradas anteriores usan la numeración vieja.
 
 ## Registro
 
@@ -314,3 +319,7 @@ Plantilla para cada entrada (copiar y completar):
   - `MIN_LONG_WORDS` está calibrado con datos sintéticos; recalibrarlo con escaneos reales.
   - La estimación tarda ~20 s para 13 documentos (secuencial); para el set completo, paralelizar o estimar con una muestra.
 
+### 2026-11-07 — Reenfoque a legajos (ADR 0001)
+- **Qué construí:** `docs/adr/0001-reenfoque-a-legajos.md`. El producto pasa de "gestión de contratos" a **armar legajos de alquiler a partir de fotos**, en dos etapas (evaluación y cierre) con el mismo motor. Roadmap nuevo: la Fase 2 sigue igual; se suman el legajo fotografiado en el generador (3), el armado del legajo (5) y la etapa 2 (8); la extracción se acota a la etapa 1 (4); el agente se acota a agrupación y asignación ambiguas (9); el RAG sobre normativa pasa a opcional. Actualizados README, CLAUDE.md, `docs/validacion.md` y la skill `/entrevista`.
+- **Qué aprendí:**
+- **Dudas abiertas:** las del ADR (sección "Decisiones abiertas").
