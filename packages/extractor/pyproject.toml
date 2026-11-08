@@ -19,6 +19,7 @@ dependencies = [
 llm-ping = "extractor.cli:main"
 experimento-entrada = "extractor.cli:experimento_entrada"
 clasificar-reglas = "extractor.cli:clasificar_reglas"
+clasificar-zero-shot = "extractor.cli:clasificar_zero_shot"
 
 [build-system]
 requires = ["uv_build>=0.13.5,<0.14.0"]

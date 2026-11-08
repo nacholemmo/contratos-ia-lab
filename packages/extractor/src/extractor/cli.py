@@ -4,12 +4,16 @@
 - `experimento-entrada`: paso 2 de la Fase 2, texto vs. imagen vs. híbrido. Sin `--run` solo
   estima el costo (con `count_tokens`, gratis).
 - `clasificar-reglas`: paso 3 de la Fase 2, el enfoque por reglas sobre todo el set (gratis).
+- `clasificar-zero-shot`: paso 3 de la Fase 2, el LLM zero-shot híbrido sobre todo el set. Sin
+  `--run` solo estima el costo (con una muestra de `count_tokens`, gratis).
 
 Uso (desde la raíz):
   uv run --package extractor llm-ping
   uv run --package extractor experimento-entrada            # solo estima
   uv run --package extractor experimento-entrada --run      # corre si no supera --max-usd
   uv run --package extractor clasificar-reglas
+  uv run --package extractor clasificar-zero-shot           # solo estima
+  uv run --package extractor clasificar-zero-shot --run     # corre si no supera --max-usd
 """
 
 import argparse
@@ -21,11 +25,13 @@ from decimal import Decimal
 from pathlib import Path
 
 from core.models import TipoDocumento
+from extractor.benchmark import estimate_hybrid_usd, hybrid_modes, run_hybrid
 from extractor.experiment import (
     estimate_usd,
     load_all_samples,
     load_samples,
     run,
+    summarize,
     summarize_all,
 )
 from extractor.inputs import page_texts
@@ -113,6 +119,18 @@ def experimento_entrada(argv: list[str] | None = None) -> int:
     return 0
 
 
+def print_hits(pairs: list[tuple[TipoDocumento, TipoDocumento | None]]) -> None:
+    """Tabla de aciertos por tipo real, a partir de pares (real, predicho)."""
+    totals = Counter(real for real, _ in pairs)
+    hits = Counter(real for real, predicted in pairs if predicted == real)
+    print(f"{'tipo':<14} {'aciertos':>12}")
+    for tipo in TipoDocumento:
+        if totals[tipo]:
+            print(f"{tipo.value:<14} {hits[tipo]:>5}/{totals[tipo]:<6}")
+    total_hits, total = sum(hits.values()), sum(totals.values())
+    print(f"{'total':<14} {total_hits:>5}/{total:<6} ({total_hits / total:.1%})")
+
+
 def clasificar_reglas(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="clasificar-reglas",
@@ -122,27 +140,80 @@ def clasificar_reglas(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     samples = load_all_samples(args.data)
-    totals: Counter[TipoDocumento] = Counter()
-    hits: Counter[TipoDocumento] = Counter()
+    pairs: list[tuple[TipoDocumento, TipoDocumento | None]] = []
     errors: list[str] = []
     for sample in samples:
         predicted = classify_by_rules(page_texts(sample.pdf.read_bytes()))
-        totals[sample.tipo] += 1
-        if predicted == sample.tipo:
-            hits[sample.tipo] += 1
-        else:
+        pairs.append((sample.tipo, predicted))
+        if predicted != sample.tipo:
             pdf = sample.pdf.relative_to(args.data)
             errors.append(f"{pdf}: {sample.tipo.value} → {predicted.value}")
 
-    print(f"{'tipo':<14} {'aciertos':>12}")
-    for tipo in TipoDocumento:
-        if totals[tipo]:
-            print(f"{tipo.value:<14} {hits[tipo]:>5}/{totals[tipo]:<6}")
-    total_hits, total = sum(hits.values()), sum(totals.values())
-    print(f"{'total':<14} {total_hits:>5}/{total:<6} ({total_hits / total:.1%})")
+    print_hits(pairs)
     print(f"\n{len(errors)} errores")
     for error in errors:
         print(f"  {error}")
+    return 0
+
+
+def clasificar_zero_shot(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="clasificar-zero-shot",
+        description="Clasifica todo el set con el LLM zero-shot y entrada híbrida.",
+    )
+    parser.add_argument("--data", type=Path, default=Path("data/synthetic"))
+    parser.add_argument("--run", action="store_true", help="hacer las llamadas (gasta saldo)")
+    parser.add_argument("--max-usd", type=Decimal, default=Decimal("0.15"), help="tope de gasto")
+    parser.add_argument("--out", type=Path, default=Path("data/experimentos"))
+    args = parser.parse_args(argv)
+
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+    settings = Settings()
+    client = make_client(settings)
+    model = settings.llm_model
+
+    samples = load_all_samples(args.data)
+    modes = hybrid_modes(samples)
+    images = sum(mode == "image" for mode in modes.values())
+    estimate = estimate_hybrid_usd(client, samples, modes, model)
+    print(f"{len(samples)} documentos ({images} por imagen) con {model}")
+    print(f"costo estimado: USD {estimate:.6f} (tope: USD {args.max_usd})")
+    if not args.run:
+        print("solo estimación: agregá --run para hacer las llamadas")
+        return 0
+    if estimate > args.max_usd:
+        print("la estimación supera el tope: no se corre")
+        return 1
+
+    outcome = run_hybrid(client, samples, modes, model, args.data, args.max_usd)
+    summary = summarize("hybrid", outcome.results)
+
+    print_hits([(r.tipo, r.predicted) for r in outcome.results])
+    print(
+        f"escaneos {summary.scanned_correct}/{summary.scanned_n} · USD {outcome.spent_usd:.6f}"
+        f" · latencia media {summary.mean_latency_s:.2f}s"
+    )
+    if outcome.stopped_early:
+        print(f"CORTADO por el tope: {len(outcome.results)} de {len(samples)} documentos")
+    print(f"\n{len(summary.errors)} errores")
+    for error in summary.errors:
+        print(f"  {error}")
+
+    args.out.mkdir(parents=True, exist_ok=True)
+    out = args.out / f"zero-shot-{datetime.now():%Y%m%d-%H%M%S}.json"
+    out.write_text(
+        json.dumps(
+            {
+                "model": model,
+                "estimate_usd": str(estimate),
+                "outcome": outcome.model_dump(mode="json"),
+                "summary": summary.model_dump(mode="json"),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+    print(f"\nresultados (solo metadatos): {out}")
     return 0
 
 
