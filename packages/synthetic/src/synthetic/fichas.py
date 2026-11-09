@@ -14,25 +14,34 @@ ALTO_FILA = 9
 ANCHO_ETIQUETA = 55
 
 
-def render_ficha(titulo: str, titulo_pdf: str, filas: list[tuple[str, str]]) -> bytes:
-    """PDF de una página con `titulo` y una fila por (etiqueta, valor)."""
+# Una página de ficha: su título y sus filas (etiqueta, valor).
+Pagina = tuple[str, list[tuple[str, str]]]
+
+
+def render_paginas(titulo_pdf: str, paginas: list[Pagina]) -> bytes:
+    """PDF con una ficha por página (por ejemplo, el frente y el dorso de un DNI)."""
     pdf = ContratoPDF(format="A4")
     marcar_sintetico(pdf, titulo_pdf)
     pdf.set_margins(20, 15, 20)
     pdf.set_auto_page_break(auto=False)
-    pdf.add_page()
-
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(0, 12, titulo, align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.ln(4)
-    arriba = pdf.get_y()
-    for etiqueta, valor in filas:
-        pdf.set_font("Helvetica", "B", 10)
-        pdf.cell(ANCHO_ETIQUETA, ALTO_FILA, etiqueta)
-        pdf.set_font("Helvetica", "", 11)
-        pdf.multi_cell(0, ALTO_FILA, valor, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.rect(pdf.l_margin - 4, arriba - 4, pdf.epw + 8, pdf.get_y() - arriba + 8)
+    for titulo, filas in paginas:
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.cell(0, 12, titulo, align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.ln(4)
+        arriba = pdf.get_y()
+        for etiqueta, valor in filas:
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.cell(ANCHO_ETIQUETA, ALTO_FILA, etiqueta)
+            pdf.set_font("Helvetica", "", 11)
+            pdf.multi_cell(0, ALTO_FILA, valor, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.rect(pdf.l_margin - 4, arriba - 4, pdf.epw + 8, pdf.get_y() - arriba + 8)
     return bytes(pdf.output())
+
+
+def render_ficha(titulo: str, titulo_pdf: str, filas: list[tuple[str, str]]) -> bytes:
+    """PDF de una página con `titulo` y una fila por (etiqueta, valor)."""
+    return render_paginas(titulo_pdf, [(titulo, filas)])
 
 
 def direccion(propiedad: Propiedad) -> str:

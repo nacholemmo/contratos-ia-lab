@@ -10,6 +10,7 @@ así el legajo es coherente y en la Fase 4 se pueden evaluar los cruces entre do
 """
 
 from datetime import date, timedelta
+from enum import IntEnum
 from uuid import UUID
 
 from core.models import DNI, Evidencia, Sexo
@@ -20,6 +21,33 @@ from synthetic.legajo import ContextoLegajo, contexto_legajo
 from synthetic.source import Source
 
 TITULO = "FICHA DE IDENTIDAD"
+
+
+class Lado(IntEnum):
+    """Lado de la ficha. El valor es la página del PDF, y en el legajo fotografiado (paso 3),
+    la foto: `DocumentoEsperado.fotos` está en este orden."""
+
+    FRENTE = 1
+    DORSO = 2
+
+
+# Título de cada lado. Los dos dicen "FICHA DE IDENTIDAD": una foto del dorso sola también se
+# tiene que poder clasificar como DNI.
+TITULOS = {Lado.FRENTE: f"{TITULO} - FRENTE", Lado.DORSO: f"{TITULO} - DORSO"}
+
+# En qué lado se imprime cada dato. Todo dato de ETIQUETAS va en exactamente un lado.
+LADOS: dict[str, Lado] = {
+    "numero": Lado.FRENTE,
+    "apellido": Lado.FRENTE,
+    "nombre": Lado.FRENTE,
+    "sexo": Lado.FRENTE,
+    "nacionalidad": Lado.FRENTE,
+    "fecha_nacimiento": Lado.FRENTE,
+    "domicilio": Lado.DORSO,
+    "fecha_emision": Lado.DORSO,
+    "fecha_vencimiento": Lado.DORSO,
+}
+
 NACIONALIDAD = "ARGENTINA"
 
 # La tarjeta del DNI de un adulto vence a los 15 años de emitida; la última actualización
@@ -156,19 +184,27 @@ def _valores(dni: DNI, source: Source) -> dict[str, str]:
 
 
 def render_ficha(dni: DNI, source: Source) -> tuple[bytes, dict[str, str]]:
-    """PDF de una página con la ficha y el texto impreso de cada dato (campo → fragmento)."""
+    """PDF de dos páginas (frente y dorso) y el texto impreso de cada dato (campo → fragmento).
+
+    Los dos lados salen siempre, aunque uno quede sin datos: una tarjeta tiene dos caras.
+    """
     valores = _valores(dni, source)
-    filas = [(ETIQUETAS[campo], valor) for campo, valor in valores.items()]
-    return fichas.render_ficha(TITULO, "Ficha de identidad", filas), valores
+    paginas = [
+        (TITULOS[lado], [(ETIQUETAS[c], v) for c, v in valores.items() if LADOS[c] == lado])
+        for lado in Lado
+    ]
+    return fichas.render_paginas("Ficha de identidad", paginas), valores
 
 
 def generate_dni_doc(
     identidad: Identidad, fecha_referencia: date, source: Source, provincia_inmueble: str
 ) -> tuple[bytes, DNI]:
-    """PDF de la ficha y su ground truth con evidencia (todo en la página 1)."""
+    """PDF de la ficha y su ground truth con evidencia: la página es el lado donde está el dato."""
     dni = generate_dni_data(identidad, fecha_referencia, source, provincia_inmueble)
     pdf, valores = render_ficha(dni, source)
-    update = {f"{c}_evidencia": Evidencia(texto=v, pagina=1) for c, v in valores.items()}
+    update = {
+        f"{c}_evidencia": Evidencia(texto=v, pagina=LADOS[c].value) for c, v in valores.items()
+    }
     return pdf, dni.model_copy(update=update)
 
 

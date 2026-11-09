@@ -144,7 +144,7 @@ Pasos:
 1. ✅ Ground truth del legajo en core: `LegajoEsperado`, con la agrupación (foto →
    documento), la asignación (documento → persona y rol), las fotos descartadas con su
    motivo, los faltantes y las alertas esperadas.
-2. DNI en frente y dorso: dos fichas de presentación propia (el dorso con el domicilio y
+2. ✅ DNI en frente y dorso: dos fichas de presentación propia (el dorso con el domicilio y
    los datos de emisión), sin imitar el diseño oficial ni su código de barras. La
    evidencia indica la foto (el lado) donde está cada dato.
 3. Modo "legajo fotografiado": cada página como foto de celular, con perspectiva, sombra,

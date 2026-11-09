@@ -416,3 +416,22 @@ Plantilla para cada entrada (copiar y completar):
 - **Dudas abiertas:**
   - Los faltantes dependen de los requisitos de la inmobiliaria, que se definen en la Fase 5. Por ahora, el generador va a usar requisitos fijos por rol.
   - `TipoDocumento.GARANTIA` todavía no distingue título de caución. Si en la Fase 4 hace falta un subtipo, se agrega acá.
+
+### 2026-11-09 — Fase 3, paso 2: DNI en frente y dorso
+- **Qué construí:**
+  - `fichas.render_paginas`: una ficha por página. `render_ficha` (una página) la usa por dentro y da los mismos bytes que antes, verificado contra la versión anterior: recibos, títulos y seguros no cambian.
+  - En `dni.py`:
+    - el enum `Lado` (frente = página 1, dorso = página 2);
+    - los títulos "FICHA DE IDENTIDAD - FRENTE" y "- DORSO" (los dos reconocibles como DNI);
+    - `LADOS`, que asigna cada dato a un lado (la división la escribió Claude, a pedido mío).
+  - La evidencia de cada dato apunta a la página de su lado.
+  - **Verificado:** `uv run pytest packages/synthetic`, 3027 passed. El test de evidencia verifica que cada dato esté en su lado y no en el otro.
+- **Qué aprendí:**
+  - **En el frente va quién es la persona; en el dorso, dónde vive y la vigencia.** Los cruces de identidad salen del frente. `DNI_VENCIDO` depende del dorso, así que obliga a juntar las dos fotos.
+  - **El número va solo en el frente, a propósito.** Con dos inquilinos, el dorso no dice de quién es, y emparejarlo es ambiguo, como en la realidad. Un generador también diseña la dificultad del examen: un set más fácil que el mundo daría métricas lindas que no sirven.
+  - **`Lado` es un `IntEnum` cuyo valor es la página:** no hay una tabla aparte que se pueda desincronizar.
+  - **Para refactorizar un generador determinístico, generalizar sin cambiar bytes.** Si cambia un byte, cambia todo el set y las corridas guardadas dejan de corresponder.
+- **Dudas abiertas:**
+  - Fase 5: ¿con qué se empareja un dorso cuando hay dos personas del mismo rol? Puede ser el orden de las fotos, el domicilio contra el de los recibos, o marcarlo como dudoso. El ground truth ya tiene la respuesta en `DocumentoEsperado.fotos`.
+  - `data/synthetic/` todavía tiene los DNI de una página: hay que regenerarlo. Las corridas de la Fase 2 en `data/experimentos/` son del set anterior, con el DNI de una página: el frente nuevo tiene menos datos y otro título, así que los resultados de la Fase 2 valen para ese set, no para el regenerado.
+  - La ficha es una página A4, no una tarjeta: revisar en el paso 3 si la foto de una tarjeta necesita otro formato.

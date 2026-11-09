@@ -11,8 +11,11 @@ from synthetic.dni import (
     EDAD_MAX,
     EDAD_MIN,
     EDAD_ULTIMA_ACTUALIZACION,
+    ETIQUETAS,
+    LADOS,
     P_MISMA_PROVINCIA,
     VIGENCIA_DNI_ANIOS,
+    Lado,
     fechas_dni,
     generate_dnis,
 )
@@ -117,13 +120,18 @@ def test_misma_semilla_mismos_dni():
 def test_evidencia_de_cada_dato_en_la_ficha(seed):
     for pdf, dni in generate_dnis(seed).values():
         texto = _texto(pdf)
-        assert len(PdfReader(BytesIO(pdf)).pages) == 1
+        paginas = [p.extract_text() for p in PdfReader(BytesIO(pdf)).pages]
+        assert len(paginas) == 2
         for campo in CAMPOS:
             evidencia = getattr(dni, f"{campo}_evidencia")
             assert (getattr(dni, campo) is None) == (evidencia is None), campo
             if evidencia is not None:
-                assert evidencia.pagina == 1
-                assert " ".join(evidencia.texto.split()) in texto, (campo, evidencia.texto)
+                # El dato está en la página que dice su evidencia, y no en la otra.
+                assert evidencia.pagina == LADOS[campo].value
+                lado = " ".join(paginas[evidencia.pagina - 1].split())
+                otro = " ".join(paginas[2 - evidencia.pagina].split())
+                assert " ".join(evidencia.texto.split()) in lado, (campo, evidencia.texto)
+                assert f"{ETIQUETAS[campo]} {evidencia.texto}" not in otro, campo
 
 
 def test_ficha_marcada_como_sintetica():
@@ -175,3 +183,31 @@ def test_domicilio_casi_siempre_en_la_provincia_del_inmueble():
     assert P_MISMA_PROVINCIA - 0.05 <= misma / total <= 0.97
     # Y así los legajos quedan mayormente en Mendoza, como los inmuebles.
     assert mendoza / total > 0.6
+
+
+# --- frente y dorso (Fase 3, paso 2) ---
+
+
+def test_cada_dato_en_un_solo_lado():
+    assert set(LADOS) == set(ETIQUETAS)
+    assert all(isinstance(lado, Lado) for lado in LADOS.values())
+
+
+def test_los_dos_lados_tienen_datos():
+    assert {LADOS[c] for c in ETIQUETAS} == set(Lado)
+
+
+def test_el_dorso_tiene_el_domicilio():
+    """El dorso lleva el domicilio: es el dato que obliga a juntar las dos fotos."""
+    assert LADOS["domicilio"] == Lado.DORSO
+
+
+def test_los_dos_lados_se_reconocen_como_ficha_de_identidad():
+    """Una foto del dorso sola también se tiene que poder clasificar como DNI."""
+    pdf, _ = next(iter(generate_dnis(0).values()))
+    for page in PdfReader(BytesIO(pdf)).pages:
+        assert "FICHA DE IDENTIDAD" in page.extract_text()
+
+
+def test_misma_semilla_mismos_bytes_con_dos_lados():
+    assert generate_dnis(7) == generate_dnis(7)
