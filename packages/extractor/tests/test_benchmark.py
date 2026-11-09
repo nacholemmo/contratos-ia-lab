@@ -33,7 +33,7 @@ def sin_render(monkeypatch):
 
 
 def fake_classify(cost: str, tipo=D):
-    def _classify(_client, _content, model):
+    def _classify(_client, _content, model, _system=None):
         usage = LlmUsage(
             model=model,
             input_tokens=1000,

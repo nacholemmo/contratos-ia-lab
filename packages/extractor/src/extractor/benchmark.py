@@ -1,4 +1,5 @@
-"""Paso 3 de la Fase 2: el LLM zero-shot con entrada híbrida, sobre todo el set.
+"""Paso 3 de la Fase 2: el LLM con entrada híbrida, sobre todo el set (zero-shot o few-shot,
+según el `system`).
 
 A diferencia del experimento del paso 2, hace una sola llamada por documento (el modo que elige
 el híbrido) y tiene dos frenos de gasto: una estimación por muestra antes de correr y un tope que
@@ -39,6 +40,7 @@ def estimate_hybrid_usd(
     modes: dict[Path, Mode],
     model: str,
     per_group: int = ESTIMATE_PER_GROUP,
+    system: str = SYSTEM_ZERO_SHOT,
 ) -> Decimal:
     """Costo estimado de clasificar todo el set: `per_group` llamadas a `count_tokens` (gratis)
     por grupo tipo × modo, y el promedio del grupo por la cantidad de documentos que tiene."""
@@ -56,7 +58,7 @@ def estimate_hybrid_usd(
             content = build_content(sample.pdf.read_bytes(), mode)
             count = client.messages.count_tokens(
                 model=model,
-                system=SYSTEM_ZERO_SHOT,
+                system=system,
                 messages=[{"role": "user", "content": content}],
             )
             costs.append(cost_usd(PRICES[model], count.input_tokens, ESTIMATED_OUTPUT_TOKENS))
@@ -65,12 +67,19 @@ def estimate_hybrid_usd(
 
 
 def classify_sample(
-    client: anthropic.Anthropic, sample: Sample, mode: Mode, model: str, root: Path
+    client: anthropic.Anthropic,
+    sample: Sample,
+    mode: Mode,
+    model: str,
+    root: Path,
+    system: str = SYSTEM_ZERO_SHOT,
 ) -> Result:
     """Una llamada para un documento. Una negativa del modelo cuenta como error (y se cobra,
     pero sin `usage` no se sabe cuánto: queda en 0)."""
     try:
-        classification = classify(client, build_content(sample.pdf.read_bytes(), mode), model)
+        classification = classify(
+            client, build_content(sample.pdf.read_bytes(), mode), model, system
+        )
         predicted, usage = classification.tipo, classification.usage
     except LlmRefusal:
         predicted, usage = None, None
@@ -94,6 +103,7 @@ def run_hybrid(
     model: str,
     root: Path,
     max_usd: Decimal,
+    system: str = SYSTEM_ZERO_SHOT,
 ) -> RunOutcome:
     """Clasifica cada documento en el modo del híbrido, sin pasarse de `max_usd`."""
     results: list[Result] = []
@@ -101,7 +111,7 @@ def run_hybrid(
     for sample in samples:
         # Freno con el gasto real, chequeado después de cada llamada: se puede pasar del tope
         # como mucho por una llamada (centésimos de centavo), sin estimar la próxima.
-        result = classify_sample(client, sample, modes[sample.pdf], model, root)
+        result = classify_sample(client, sample, modes[sample.pdf], model, root, system)
         results.append(result)
         spent += result.cost_usd
         if spent > max_usd:

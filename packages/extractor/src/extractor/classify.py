@@ -41,7 +41,11 @@ def parse_tipo(answer: str) -> TipoDocumento | None:
 
 
 def classify(
-    client: anthropic.Anthropic, content: str | list[dict[str, Any]], model: str
+    client: anthropic.Anthropic,
+    content: str | list[dict[str, Any]],
+    model: str,
+    system: str = SYSTEM_ZERO_SHOT,
 ) -> Classification:
-    response = call_llm(client, system=SYSTEM_ZERO_SHOT, content=content, model=model)
+    """`system` cambia el enfoque (zero-shot por default, few-shot con ejemplos)."""
+    response = call_llm(client, system=system, content=content, model=model)
     return Classification(tipo=parse_tipo(response.text), usage=response.usage)
