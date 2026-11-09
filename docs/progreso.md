@@ -356,3 +356,45 @@ Plantilla para cada entrada (copiar y completar):
   - `garantia` necesita subtipo (título o caución): ahora lo respaldan los errores de TF-IDF y de los embeddings.
   - `select_examples` y el subtipo dependen del nombre del archivo; con las fotos de la Fase 3 (`IMG_4821.jpg`) eso no va a funcionar.
   - Embeddings de imagen (CLIP o SigLIP) para que un clasificador local también lea escaneos y fotos.
+
+### 2026-11-09 — Fase 2, paso 4: métricas y clasificador elegido
+- **Qué construí:**
+  - `splits.py`: la separación por legajo, que antes estaba en `vectors.py`. Así la comparación no depende del extra `ml`.
+  - `metrics.py`: matriz de confusión, accuracy, F1 macro y `class_metrics`, con precisión, recall y F1 por clase (la escribió Claude, a pedido mío).
+  - `compare.py` y la CLI `comparar-clasificadores`. Evalúan los enfoques sobre **el mismo conjunto**: la prueba de la separación por legajo más los escaneos, menos lo que algún enfoque no evaluó. Leen las corridas guardadas (sin gastar) y recalculan las reglas.
+  - Experimento `clasificar-zero-shot-def`: el mismo prompt con una sola línea cambiada, la definición de `garantia`. Para eso, las definiciones pasaron a `DEFINICIONES` y el prompt v1 quedó congelado por un test.
+  - `test_cli.py`: corre las CLIs del LLM de punta a punta con un cliente falso. Una corrida de USD 0,04 se perdió porque un nombre importado dos veces hizo caer el programa después de las llamadas. Desde ahora, los resultados se guardan apenas terminan las llamadas.
+  - **Verificado:** `uv run pytest packages/extractor`, 107 passed.
+  - **Resultados:**
+
+  | enfoque | accuracy | F1 macro | escaneos | USD cada 1.000 docs | latencia |
+  |---|---|---|---|---|---|
+  | reglas | 96,1 % | 0,973 | 0/8 | 0 | 0,1 ms |
+  | TF-IDF + RL | 95,1 % | 0,949 | 0/8 | 0 | 0,3 ms |
+  | embeddings + RL | 95,1 % | 0,949 | 0/8 | 0 | 48,5 ms |
+  | LLM zero-shot (v1) | 99,5 % | 0,991 | 8/8 | 0,075 | 953 ms |
+  | **LLM zero-shot (definición nueva)** | **100 %** | **1,000** | **8/8** | **0,079** | **939 ms** |
+  | LLM few-shot | 100 % | 1,000 | 8/8 | 0,263 | 1.018 ms |
+
+  Son 204 documentos comunes. Sobre los 565 del set, el zero-shot con la definición nueva acierta 565 de 565 por USD 0,041.
+- **Clasificador elegido: el LLM zero-shot con entrada híbrida y la definición nueva de `garantia`.**
+  - Es el único enfoque barato que lee imágenes, y el producto es "legajos a partir de fotos". En la Fase 3, casi nada va a tener capa de texto.
+  - Iguala al few-shot con 3,3 veces menos costo, sin ejemplos que mantener y sin el riesgo de que los ejemplos salgan de la misma plantilla que lo evaluado.
+  - Un legajo de unas 15 fotos cuesta alrededor de USD 0,001.
+  - Reglas y TF-IDF quedan como líneas de base para las evals de la Fase 6.
+- **Qué aprendí:**
+  - **Accuracy esconde las clases chicas.** Por clase, todos los errores fueron de recall, no de precisión: documentos que se escapan, que en un legajo son faltantes falsos.
+  - **Una falsa alarma de una clase es un error de otra.** La caución que TF-IDF llama `seguro` le baja el recall a `garantia` y la precisión a `seguro`.
+  - **El error del zero-shot estaba en la definición, no en el modelo.** El título dice "constancia de titularidad de inmueble" y la definición pedía "de un garante". Describir lo que se ve en el documento arregló lo mismo que 6 ejemplos, con 1.880 tokens menos por llamada.
+  - **Un experimento con prompts cambia una sola cosa por vez**, y el prompt viejo se congela: las corridas guardadas valen solo para el prompt con el que se hicieron.
+  - **Con 204 documentos, 1 error es 0,5 %:** la diferencia no es estadísticamente distinguible. La decisión se apoya en el costo, los escaneos y el tipo de error.
+  - **En un proceso que gasta, primero se guarda y después se calcula.**
+- **Dudas abiertas:**
+  - Con la definición nueva, ¿el seguro de incendio de un set real se confunde con `garantia`? En el set sintético, no.
+  - El set sintético se arma con plantillas, así que el 100 % es sobre documentos fáciles. La medición que importa es con las fotos de la Fase 3 y con la clase `otro` (intrusas), que este set no tiene.
+  - Latencia: unos 0,9 s por documento en secuencia. En el servicio, paralelizar las llamadas de un legajo.
+  - Progreso visible en las CLIs largas (un contador cada N documentos).
+
+### Cierre de la Fase 2: clasificación de documentos
+- **Terminado cuando:** "hay una tabla comparativa de los 4 enfoques y un clasificador elegido con su justificación". Se cumple con la tabla de arriba (los 4 enfoques del roadmap, más el few-shot y la variante con la definición nueva) y la elección del zero-shot híbrido con la definición nueva.
+- **Lo que deja para las fases siguientes:** `call_llm` como única puerta, con costo exacto y logs sin contenido; la entrada híbrida; `comparar-clasificadores` como base de las evals; y la separación por legajo para todo lo que se entrene.

@@ -13,7 +13,8 @@ from pdf_fixtures import image_pdf, text_pdf  # noqa: E402
 from core.models import TipoDocumento  # noqa: E402
 from extractor import vectors  # noqa: E402
 from extractor.experiment import Sample  # noqa: E402
-from extractor.vectors import legajo_key, run_vectors, split_by_legajo  # noqa: E402
+from extractor.splits import legajo_key, split_by_legajo  # noqa: E402
+from extractor.vectors import run_vectors  # noqa: E402
 
 DOCUMENTOS = {
     "contrato": (TipoDocumento.CONTRATO, "CONTRATO DE LOCACION entre locador y locatario"),

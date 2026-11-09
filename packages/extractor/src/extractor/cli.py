@@ -6,10 +6,14 @@
 - `clasificar-reglas`: paso 3 de la Fase 2, el enfoque por reglas sobre todo el set (gratis).
 - `clasificar-zero-shot`: paso 3 de la Fase 2, el LLM zero-shot híbrido sobre todo el set. Sin
   `--run` solo estima el costo (con una muestra de `count_tokens`, gratis).
+- `clasificar-zero-shot-def`: paso 4 de la Fase 2, el zero-shot con otra definición de
+  `garantia` (lo único que cambia). Sin `--run` solo estima.
 - `clasificar-few-shot`: paso 3 de la Fase 2, el mismo LLM con ejemplos resueltos en el prompt.
   Los ejemplos salen del set y no se evalúan. Sin `--run` solo estima.
 - `clasificar-vectores`: paso 3 de la Fase 2, TF-IDF y embeddings locales + regresión logística,
   con separación por legajo. Gratis; necesita el extra `ml` (`uv sync --extra ml`).
+- `comparar-clasificadores`: paso 4 de la Fase 2, los 5 enfoques sobre el mismo conjunto de
+  prueba, con F1 por clase y matriz de confusión. Lee las corridas guardadas: no gasta.
 
 Uso (desde la raíz):
   uv run --package extractor llm-ping
@@ -18,9 +22,11 @@ Uso (desde la raíz):
   uv run --package extractor clasificar-reglas
   uv run --package extractor clasificar-zero-shot           # solo estima
   uv run --package extractor clasificar-zero-shot --run     # corre si no supera --max-usd
+  uv run --package extractor clasificar-zero-shot-def --run # corre si no supera --max-usd
   uv run --package extractor clasificar-few-shot            # solo estima
   uv run --package extractor clasificar-few-shot --run      # corre si no supera --max-usd
   uv run --package extractor clasificar-vectores            # tfidf y embeddings
+  uv run --package extractor comparar-clasificadores        # --detalle few-shot, tfidf, …
 """
 
 import argparse
@@ -35,7 +41,7 @@ from typing import Any
 
 from core.models import TipoDocumento
 from extractor.benchmark import estimate_hybrid_usd, hybrid_modes, run_hybrid
-from extractor.classify import SYSTEM_ZERO_SHOT
+from extractor.classify import GARANTIA_V2, SYSTEM_ZERO_SHOT, SYSTEM_ZERO_SHOT_DEF
 from extractor.experiment import (
     Sample,
     estimate_usd,
@@ -45,9 +51,20 @@ from extractor.experiment import (
     summarize,
     summarize_all,
 )
+from extractor.compare import (
+    APPROACHES,
+    common_pdfs,
+    eval_samples,
+    latest,
+    load_llm_run,
+    load_vector_run,
+    rules_run,
+)
+from extractor.compare import summarize as summarize_run
 from extractor.fewshot import build_system_few_shot, select_examples, without_examples
 from extractor.inputs import page_texts
 from extractor.llm import call_llm
+from extractor.metrics import confusion_matrix
 from extractor.rules import classify_by_rules
 from extractor.settings import Settings, make_client
 
@@ -205,6 +222,18 @@ def run_llm_classifier(
         return 1
 
     outcome = run_hybrid(client, samples, modes, model, args.data, args.max_usd, system=system)
+
+    # Se guarda apenas terminan las llamadas: si algo falla después, lo pagado no se pierde.
+    args.out.mkdir(parents=True, exist_ok=True)
+    out = args.out / f"{prog.removeprefix('clasificar-')}-{datetime.now():%Y%m%d-%H%M%S}.json"
+    record = {
+        "model": model,
+        "estimate_usd": str(estimate),
+        **extra,
+        "outcome": outcome.model_dump(mode="json"),
+    }
+    out.write_text(json.dumps(record, indent=2, ensure_ascii=False))
+
     summary = summarize("hybrid", outcome.results)
 
     print_hits([(r.tipo, r.predicted) for r in outcome.results])
@@ -218,21 +247,8 @@ def run_llm_classifier(
     for error in summary.errors:
         print(f"  {error}")
 
-    args.out.mkdir(parents=True, exist_ok=True)
-    out = args.out / f"{prog.removeprefix('clasificar-')}-{datetime.now():%Y%m%d-%H%M%S}.json"
-    out.write_text(
-        json.dumps(
-            {
-                "model": model,
-                "estimate_usd": str(estimate),
-                **extra,
-                "outcome": outcome.model_dump(mode="json"),
-                "summary": summary.model_dump(mode="json"),
-            },
-            indent=2,
-            ensure_ascii=False,
-        )
-    )
+    record["summary"] = summary.model_dump(mode="json")
+    out.write_text(json.dumps(record, indent=2, ensure_ascii=False))
     print(f"\nresultados (solo metadatos): {out}")
     return 0
 
@@ -243,6 +259,15 @@ def clasificar_zero_shot(argv: list[str] | None = None) -> int:
         prog="clasificar-zero-shot",
         description="Clasifica todo el set con el LLM zero-shot y entrada híbrida.",
         prepare=lambda samples: (SYSTEM_ZERO_SHOT, samples, {}),
+    )
+
+
+def clasificar_zero_shot_def(argv: list[str] | None = None) -> int:
+    return run_llm_classifier(
+        argv,
+        prog="clasificar-zero-shot-def",
+        description="El zero-shot con la definición de garantía del experimento del paso 4.",
+        prepare=lambda samples: (SYSTEM_ZERO_SHOT_DEF, samples, {"garantia": GARANTIA_V2}),
     )
 
 
@@ -303,6 +328,111 @@ def clasificar_vectores(argv: list[str] | None = None) -> int:
         out = args.out / f"vectores-{method}-{datetime.now():%Y%m%d-%H%M%S}.json"
         out.write_text(outcome.model_dump_json(indent=2))
         print(f"resultados (solo metadatos): {out}")
+    return 0
+
+
+def print_confusion(pairs: list[tuple[TipoDocumento, TipoDocumento | None]]) -> None:
+    """Filas: clase real. Columnas: lo que predijo. La diagonal son los aciertos."""
+    matrix = confusion_matrix(pairs)
+    cols: list[TipoDocumento | None] = list(TipoDocumento)
+    if any(predicted is None for _, predicted in pairs):
+        cols.append(None)
+    short = {t: t.value[:7] for t in TipoDocumento}
+    print(f"{'real → pred':<14}" + "".join(f"{short.get(c, 'None'):>9}" for c in cols))
+    for real in TipoDocumento:
+        if not any(r == real for r, _ in pairs):
+            continue
+        print(f"{real.value:<14}" + "".join(f"{matrix[(real, c)] or '.':>9}" for c in cols))
+
+
+def comparar_clasificadores(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="comparar-clasificadores",
+        description="Los 5 enfoques sobre el mismo conjunto de prueba (sin llamadas nuevas).",
+    )
+    parser.add_argument("--data", type=Path, default=Path("data/synthetic"))
+    parser.add_argument("--runs", type=Path, default=Path("data/experimentos"))
+    parser.add_argument(
+        "--detalle", choices=list(APPROACHES), default="zero-shot", help="matriz de confusión"
+    )
+    args = parser.parse_args(argv)
+
+    samples = load_all_samples(args.data)
+    runs = [rules_run(samples, args.data)]
+    for name, prefix in APPROACHES.items():
+        if prefix is None:
+            continue
+        try:
+            path = latest(args.runs, prefix)
+        except FileNotFoundError:
+            print(f"(sin corrida de {name}: queda afuera)")
+            continue
+        loader = load_vector_run if prefix.startswith("vectores-") else load_llm_run
+        runs.append(loader(path, name))
+
+    evaluated = eval_samples(samples)
+    rel = {s.pdf: str(s.pdf.relative_to(args.data)) for s in evaluated}
+    pdfs = common_pdfs([rel[s.pdf] for s in evaluated], runs)
+    truth = {rel[s.pdf]: s.tipo for s in evaluated}
+    scanned = {rel[s.pdf] for s in evaluated if s.scanned}
+    rows = [summarize_run(run, pdfs, truth, scanned) for run in runs]
+
+    print(f"{len(pdfs)} documentos comunes ({len(evaluated)} en la prueba, {len(scanned)} escaneos)")
+    for run in runs:
+        print(f"  {run.name:<11} ← {run.source}")
+    print(
+        f"\n{'enfoque':<11} {'accuracy':>9} {'F1 macro':>9} {'escaneos':>9}"
+        f" {'USD/1000':>9} {'latencia':>10}"
+    )
+    for r in rows:
+        print(
+            f"{r.name:<11} {r.accuracy:>9.1%} {r.macro_f1:>9.3f} {r.scanned_correct:>4}/{r.scanned_n:<4}"
+            f" {r.usd_per_1000:>9.4f} {r.mean_latency_s * 1000:>8.1f}ms"
+        )
+
+    present = list(rows[0].per_class)
+    print(f"\nF1 por clase\n{'enfoque':<11}" + "".join(f"{t.value[:12]:>14}" for t in present))
+    for r in rows:
+        print(f"{r.name:<11}" + "".join(f"{r.per_class[t].f1:>14.3f}" for t in present))
+
+    detail = next(r for r in rows if r.name == args.detalle)
+    run = next(r for r in runs if r.name == args.detalle)
+    print(f"\nMatriz de confusión: {detail.name}")
+    print_confusion([(truth[p], run.predicted[p]) for p in pdfs])
+    print(f"\nPrecisión y recall: {detail.name}")
+    for tipo, m in detail.per_class.items():
+        print(f"  {tipo.value:<14} P={m.precision:.3f} R={m.recall:.3f} F1={m.f1:.3f} (n={m.support})")
+    print(f"\n{len(detail.errors)} errores de {detail.name}")
+    for error in detail.errors:
+        print(f"  {error}")
+
+    out = args.runs / f"comparacion-{datetime.now():%Y%m%d-%H%M%S}.json"
+    out.write_text(
+        json.dumps(
+            {
+                "documentos": pdfs,
+                "fuentes": {run.name: run.source for run in runs},
+                "filas": [
+                    {
+                        "enfoque": r.name,
+                        "n": r.n,
+                        "accuracy": r.accuracy,
+                        "macro_f1": r.macro_f1,
+                        "escaneos": f"{r.scanned_correct}/{r.scanned_n}",
+                        "usd": str(r.cost_usd),
+                        "usd_por_1000": str(r.usd_per_1000),
+                        "latencia_media_s": r.mean_latency_s,
+                        "f1_por_clase": {t.value: m.f1 for t, m in r.per_class.items()},
+                        "errores": r.errors,
+                    }
+                    for r in rows
+                ],
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+    print(f"\nresultados (solo metadatos): {out}")
     return 0
 
 

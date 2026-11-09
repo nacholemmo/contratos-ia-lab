@@ -118,19 +118,19 @@ Terminado cuando: hay 50 contratos y sus complementarios con su JSON; un test ve
 que cada JSON valida contra su modelo y otro que la misma semilla produce el mismo
 contrato (mismos datos y mismo PDF).
 
-## Fase 2 — Clasificación de documentos (packages/extractor)
+## Fase 2 — Clasificación de documentos (packages/extractor) ✅
 Objetivo: documento → tipo (contrato, DNI, recibo de sueldo, garantía, seguro u otro).
 Recursos: [Scrimba] Intro to AI Engineering + Multimodality · [Path] semana 2.
 Sin cambios por el reenfoque (ADR 0001): se cierra con el set de PDFs actual. La
 clasificación de fotos (con `otro` y el lado del DNI) se mide en las Fases 5 y 6.
 Conceptos: APIs de LLM, texto extraído vs. visión, tokens y costos, métricas de clasificación.
 Pasos:
-1. Llamada mínima a la API con el SDK oficial; registrar tokens, costo y latencia (sin
+1. ✅ Llamada mínima a la API con el SDK oficial; registrar tokens, costo y latencia (sin
    registrar el contenido del documento).
-2. Entrada del documento: texto extraído del PDF vs. imágenes de las páginas. Comparar
+2. ✅ Entrada del documento: texto extraído del PDF vs. imágenes de las páginas. Comparar
    calidad y costo, incluyendo los escaneos torcidos.
-3. Comparar 4 enfoques: reglas, LLM zero-shot, few-shot y embeddings + regresión logística.
-4. Métricas sobre el set sintético: accuracy, F1 por clase, matriz de confusión, costo y latencia.
+3. ✅ Comparar 4 enfoques: reglas, LLM zero-shot, few-shot y embeddings + regresión logística.
+4. ✅ Métricas sobre el set sintético: accuracy, F1 por clase, matriz de confusión, costo y latencia.
 Terminado cuando: hay una tabla comparativa de los 4 enfoques y un clasificador elegido
 con su justificación.
 

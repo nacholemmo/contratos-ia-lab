@@ -20,8 +20,10 @@ llm-ping = "extractor.cli:main"
 experimento-entrada = "extractor.cli:experimento_entrada"
 clasificar-reglas = "extractor.cli:clasificar_reglas"
 clasificar-zero-shot = "extractor.cli:clasificar_zero_shot"
+clasificar-zero-shot-def = "extractor.cli:clasificar_zero_shot_def"
 clasificar-few-shot = "extractor.cli:clasificar_few_shot"
 clasificar-vectores = "extractor.cli:clasificar_vectores"
+comparar-clasificadores = "extractor.cli:comparar_clasificadores"
 
 [project.optional-dependencies]
 ml = [
