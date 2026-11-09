@@ -398,3 +398,21 @@ Plantilla para cada entrada (copiar y completar):
 ### Cierre de la Fase 2: clasificación de documentos
 - **Terminado cuando:** "hay una tabla comparativa de los 4 enfoques y un clasificador elegido con su justificación". Se cumple con la tabla de arriba (los 4 enfoques del roadmap, más el few-shot y la variante con la definición nueva) y la elección del zero-shot híbrido con la definición nueva.
 - **Lo que deja para las fases siguientes:** `call_llm` como única puerta, con costo exacto y logs sin contenido; la entrada híbrida; `comparar-clasificadores` como base de las evals; y la separación por legajo para todo lo que se entrene.
+
+### 2026-11-09 — Fase 3, paso 1: ground truth del legajo (`LegajoEsperado`)
+- **Qué construí:** `core/legajo.py`, la respuesta correcta del armado de un legajo para una semilla.
+  - Enums: `Etapa` (evaluación o cierre), `MotivoDescarte` (intrusa, duplicada o ilegible) y `TipoAlerta`, con los 8 cruces del roadmap.
+  - Modelos: `PersonaEsperada`, `FotoEsperada`, `DocumentoEsperado` (con sus fotos en orden: frente, dorso o páginas), `FaltanteEsperado`, `AlertaEsperada` y `LegajoEsperado`, que los reúne con el alquiler propuesto.
+  - Validadores:
+    - `ids_y_personas` (Claude): ids únicos, y toda referencia a una persona o un documento apunta a uno que existe.
+    - `cada_foto_en_un_lugar` (Claude me pasó la solución después de mi intento): cada foto está en un documento o descartada, nunca en los dos ni en ninguno, y un duplicado apunta a una foto que se conserva.
+  - **Verificado:** `uv run pytest packages/core`, 50 passed. `test_legajo.py` tiene un legajo de ejemplo con 7 fotos, y cada test rompe una sola cosa.
+- **Qué aprendí:**
+  - **Ground truth de estructura, no solo de campos:** para medir el armado hay que saber qué fotos forman cada documento, de quién es y qué sobra. Un error de agrupación arruina los cruces aunque cada campo se haya leído bien.
+  - **La relación foto → documento se guarda en un solo lugar** (`DocumentoEsperado.fotos`). Mi primer intento buscaba `f.documento_id`, pero la foto no sabe en qué documento está: el sentido inverso se reconstruye recorriendo los documentos. Es un poco más de cálculo a cambio de que el modelo no pueda contradecirse.
+  - **Ids como strings fijos y no UUID:** la misma semilla tiene que dar los mismos bytes.
+  - **Un ground truth también puede estar mal.** Los validadores evitan que las evals culpen al servicio por un error del generador.
+  - **`en_doc == descartada` es un XOR:** exactamente una de las dos condiciones tiene que ser verdadera.
+- **Dudas abiertas:**
+  - Los faltantes dependen de los requisitos de la inmobiliaria, que se definen en la Fase 5. Por ahora, el generador va a usar requisitos fijos por rol.
+  - `TipoDocumento.GARANTIA` todavía no distingue título de caución. Si en la Fase 4 hace falta un subtipo, se agrega acá.

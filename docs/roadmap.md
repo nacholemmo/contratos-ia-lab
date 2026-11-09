@@ -141,7 +141,7 @@ con el desorden de la vida real y su ground truth.
 Conceptos: augmentación realista, ground truth de estructura (no solo de campos),
 inconsistencias inyectadas y etiquetadas, set sorteado y forzado.
 Pasos:
-1. Ground truth del legajo en core: `LegajoEsperado`, con la agrupación (foto →
+1. ✅ Ground truth del legajo en core: `LegajoEsperado`, con la agrupación (foto →
    documento), la asignación (documento → persona y rol), las fotos descartadas con su
    motivo, los faltantes y las alertas esperadas.
 2. DNI en frente y dorso: dos fichas de presentación propia (el dorso con el domicilio y
