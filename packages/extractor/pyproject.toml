@@ -21,6 +21,14 @@ experimento-entrada = "extractor.cli:experimento_entrada"
 clasificar-reglas = "extractor.cli:clasificar_reglas"
 clasificar-zero-shot = "extractor.cli:clasificar_zero_shot"
 clasificar-few-shot = "extractor.cli:clasificar_few_shot"
+clasificar-vectores = "extractor.cli:clasificar_vectores"
+
+[project.optional-dependencies]
+ml = [
+    "scikit-learn>=1.9.1",
+    "sentence-transformers>=6.2.0",
+    "torch>=2.15.0",
+]
 
 [build-system]
 requires = ["uv_build>=0.13.5,<0.14.0"]

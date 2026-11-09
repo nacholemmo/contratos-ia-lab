@@ -8,6 +8,8 @@
   `--run` solo estima el costo (con una muestra de `count_tokens`, gratis).
 - `clasificar-few-shot`: paso 3 de la Fase 2, el mismo LLM con ejemplos resueltos en el prompt.
   Los ejemplos salen del set y no se evalúan. Sin `--run` solo estima.
+- `clasificar-vectores`: paso 3 de la Fase 2, TF-IDF y embeddings locales + regresión logística,
+  con separación por legajo. Gratis; necesita el extra `ml` (`uv sync --extra ml`).
 
 Uso (desde la raíz):
   uv run --package extractor llm-ping
@@ -18,6 +20,7 @@ Uso (desde la raíz):
   uv run --package extractor clasificar-zero-shot --run     # corre si no supera --max-usd
   uv run --package extractor clasificar-few-shot            # solo estima
   uv run --package extractor clasificar-few-shot --run      # corre si no supera --max-usd
+  uv run --package extractor clasificar-vectores            # tfidf y embeddings
 """
 
 import argparse
@@ -259,6 +262,48 @@ def clasificar_few_shot(argv: list[str] | None = None) -> int:
         description="Clasifica el set (menos los ejemplos) con el LLM few-shot y entrada híbrida.",
         prepare=prepare_few_shot,
     )
+
+
+def clasificar_vectores(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="clasificar-vectores",
+        description="TF-IDF y/o embeddings + regresión logística (local, gratis, extra `ml`).",
+    )
+    parser.add_argument("--data", type=Path, default=Path("data/synthetic"))
+    parser.add_argument(
+        "--metodo", choices=["tfidf", "embeddings", "ambos"], default="ambos", help="vectorizador"
+    )
+    parser.add_argument("--out", type=Path, default=Path("data/experimentos"))
+    args = parser.parse_args(argv)
+
+    from extractor.vectors import run_vectors  # necesita el extra `ml`
+
+    samples = load_all_samples(args.data)
+    methods = ["tfidf", "embeddings"] if args.metodo == "ambos" else [args.metodo]
+    args.out.mkdir(parents=True, exist_ok=True)
+    for method in methods:
+        outcome = run_vectors(samples, method, args.data)
+        results = outcome.results
+        scanned = [r for r in results if r.scanned]
+        print(
+            f"\n=== {method}: entrenado con {outcome.n_train} documentos, "
+            f"{len(outcome.train_legajos)} legajos; evaluado con {len(results)} ==="
+        )
+        print_hits([(r.tipo, r.predicted) for r in results])
+        print(
+            f"escaneos {sum(r.predicted == r.tipo for r in scanned)}/{len(scanned)}"
+            f" · entrenar {outcome.fit_s:.2f}s"
+            f" · predecir {outcome.predict_s / max(1, len(results)) * 1000:.1f} ms/doc"
+        )
+        errors = [r for r in results if r.predicted != r.tipo]
+        print(f"{len(errors)} errores")
+        for r in errors:
+            print(f"  {r.pdf}: {r.tipo.value} → {r.predicted.value} (p={r.confidence:.2f})")
+
+        out = args.out / f"vectores-{method}-{datetime.now():%Y%m%d-%H%M%S}.json"
+        out.write_text(outcome.model_dump_json(indent=2))
+        print(f"resultados (solo metadatos): {out}")
+    return 0
 
 
 if __name__ == "__main__":

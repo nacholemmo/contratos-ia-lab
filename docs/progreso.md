@@ -323,3 +323,36 @@ Plantilla para cada entrada (copiar y completar):
 - **Qué construí:** `docs/adr/0001-reenfoque-a-legajos.md`. El producto pasa de "gestión de contratos" a **armar legajos de alquiler a partir de fotos**, en dos etapas (evaluación y cierre) con el mismo motor. Roadmap nuevo: la Fase 2 sigue igual; se suman el legajo fotografiado en el generador (3), el armado del legajo (5) y la etapa 2 (8); la extracción se acota a la etapa 1 (4); el agente se acota a agrupación y asignación ambiguas (9); el RAG sobre normativa pasa a opcional. Actualizados README, CLAUDE.md, `docs/validacion.md` y la skill `/entrevista`.
 - **Qué aprendí:**
 - **Dudas abiertas:** las del ADR (sección "Decisiones abiertas").
+
+### 2026-11-09 — Fase 2, paso 3: cuatro enfoques para clasificar
+- **Qué construí:** sobre el set de 565 documentos (8 contratos escaneados), cuatro clasificadores con sus CLIs, que guardan solo metadatos en `data/experimentos/`.
+  - **Reglas** (`rules.py`, `clasificar-reglas`): frases clave en orden, el contrato primero porque cita a los demás.
+  - **LLM zero-shot híbrido** (`benchmark.py`, `clasificar-zero-shot`): estima el costo con una muestra estratificada de `count_tokens` y corta si el gasto real pasa el tope.
+  - **LLM few-shot** (`fewshot.py`, `clasificar-few-shot`): el mismo prompt más 6 ejemplos de texto recortado. `select_examples` la escribí yo con la solución de Claude: uno por clase y, en garantía, un título y una caución. Los ejemplos salen de la evaluación. Zero-shot y few-shot comparten `run_llm_classifier` en la CLI.
+  - **TF-IDF y embeddings + regresión logística** (`vectors.py`, `clasificar-vectores`): `multilingual-e5-small` corre local con `sentence-transformers`. Las dependencias van en el extra `ml`, y `torch` sale del índice de PyTorch solo CPU (configurado en la raíz). `split_by_legajo` la escribí yo: sortea legajos, no documentos, con `random.Random(seed)`.
+  - **Resultados:**
+
+  | enfoque | aciertos | escaneos | costo | latencia |
+  |---|---|---|---|---|
+  | reglas | 557/565 | 0/8 | 0 | ~0 |
+  | TF-IDF + RL | 194/204 (prueba) | 0/8 | 0 | 0,3 ms |
+  | embeddings + RL | 194/204 (prueba) | 0/8 | 0 | 48,5 ms |
+  | LLM zero-shot | 562/565 | 8/8 | USD 0,039 | 0,92 s |
+  | LLM few-shot | 559/559 | 8/8 | USD 0,144 | 0,97 s |
+
+  - **Verificado:** `uv run pytest packages/extractor` en verde, y `ruff check` y `ruff format` sin errores.
+- **Qué aprendí:**
+  - **Fuga de datos, en tres formas:**
+    - Un ejemplo del few-shot que también se evalúa.
+    - Un legajo partido entre entrenamiento y prueba (comparten nombres y domicilios), incluida la misma semilla repetida en varias carpetas del set forzado.
+    - El vocabulario y el IDF de TF-IDF ajustados con la prueba.
+  - **Comparación pareada:** con diferencias de 1 o 2 errores, dos enfoques se comparan sobre los mismos documentos. Contra el few-shot, el zero-shot tenía 2 errores, no 3: uno de los títulos que fallaba quedó como ejemplo.
+  - **El few-shot arregló los títulos, pero cuesta 3,7 veces más:** suma 1.880 tokens de ejemplos en cada llamada. Además, el ejemplo sale de la misma plantilla que lo evaluado, así que la mejora está inflada con respecto a documentos reales.
+  - **TF-IDF y embeddings fallan en lo mismo:** los escaneos (no tienen texto) y las cauciones (2 de entrenamiento contra unos 40 títulos, y vocabulario de seguro). El "significado" no ayuda cuando la clase la define una regla del dominio (la función del documento) y no el tema.
+  - **La probabilidad de la regresión logística separa aciertos de errores:** en TF-IDF, los aciertos tienen p de 0,73 como mínimo y los errores p de 0,50. Eso habilita una cascada: lo seguro, local y gratis; lo dudoso, al LLM. La escala de confianza es propia de cada método, así que el umbral se calibra por método.
+- **Dudas abiertas:**
+  - Paso 4: unificar el conjunto de evaluación (los legajos de prueba de la separación) para que los 5 enfoques se comparen sobre los mismos documentos, con F1 por clase y matriz de confusión.
+  - Probar el zero-shot con una definición más precisa de `garantia` en el prompt: cuesta cero tokens extra y quizá iguala al few-shot.
+  - `garantia` necesita subtipo (título o caución): ahora lo respaldan los errores de TF-IDF y de los embeddings.
+  - `select_examples` y el subtipo dependen del nombre del archivo; con las fotos de la Fase 3 (`IMG_4821.jpg`) eso no va a funcionar.
+  - Embeddings de imagen (CLIP o SigLIP) para que un clasificador local también lea escaneos y fotos.
