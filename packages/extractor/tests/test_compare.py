@@ -4,6 +4,7 @@ import json
 from decimal import Decimal
 
 import pytest
+from pdf_fixtures import image_pdf, text_pdf
 
 from core.models import TipoDocumento
 from extractor import compare
@@ -17,7 +18,6 @@ from extractor.compare import (
     summarize,
 )
 from extractor.experiment import Sample
-from pdf_fixtures import image_pdf, text_pdf
 
 C, D, G, S, O = (
     TipoDocumento.CONTRATO,
@@ -102,7 +102,7 @@ def test_summarize():
         "x",
         predicted={"1.pdf": C, "2.pdf": G, "3.pdf": O, "4.pdf": S},
         cost_usd={p: Decimal("0.0001") for p in truth},
-        latency_s={p: 1.0 for p in truth},
+        latency_s=dict.fromkeys(truth, 1.0),
     )
 
     row = summarize(run, list(truth), truth, scanned={"1.pdf"})
@@ -153,7 +153,9 @@ def test_eval_samples_incluye_los_escaneos_y_parte_de_los_legajos(legajo_set):
     assert len(folders) < 10  # pero no todos
 
 
-def test_eval_samples_es_el_mismo_conjunto_que_evaluo_run_vectors(legajo_set, tmp_path, monkeypatch):
+def test_eval_samples_es_el_mismo_conjunto_que_evaluo_run_vectors(
+    legajo_set, tmp_path, monkeypatch
+):
     pytest.importorskip("sklearn", reason="necesita el extra ml: uv sync --extra ml")
     from extractor import vectors
 

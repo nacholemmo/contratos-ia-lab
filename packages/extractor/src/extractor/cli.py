@@ -42,15 +42,6 @@ from typing import Any
 from core.models import TipoDocumento
 from extractor.benchmark import estimate_hybrid_usd, hybrid_modes, run_hybrid
 from extractor.classify import GARANTIA_V2, SYSTEM_ZERO_SHOT, SYSTEM_ZERO_SHOT_DEF
-from extractor.experiment import (
-    Sample,
-    estimate_usd,
-    load_all_samples,
-    load_samples,
-    run,
-    summarize,
-    summarize_all,
-)
 from extractor.compare import (
     APPROACHES,
     common_pdfs,
@@ -61,6 +52,15 @@ from extractor.compare import (
     rules_run,
 )
 from extractor.compare import summarize as summarize_run
+from extractor.experiment import (
+    Sample,
+    estimate_usd,
+    load_all_samples,
+    load_samples,
+    run,
+    summarize,
+    summarize_all,
+)
 from extractor.fewshot import build_system_few_shot, select_examples, without_examples
 from extractor.inputs import page_texts
 from extractor.llm import call_llm
@@ -377,7 +377,9 @@ def comparar_clasificadores(argv: list[str] | None = None) -> int:
     scanned = {rel[s.pdf] for s in evaluated if s.scanned}
     rows = [summarize_run(run, pdfs, truth, scanned) for run in runs]
 
-    print(f"{len(pdfs)} documentos comunes ({len(evaluated)} en la prueba, {len(scanned)} escaneos)")
+    print(
+        f"{len(pdfs)} documentos comunes ({len(evaluated)} en la prueba, {len(scanned)} escaneos)"
+    )
     for run in runs:
         print(f"  {run.name:<11} ← {run.source}")
     print(
@@ -401,7 +403,9 @@ def comparar_clasificadores(argv: list[str] | None = None) -> int:
     print_confusion([(truth[p], run.predicted[p]) for p in pdfs])
     print(f"\nPrecisión y recall: {detail.name}")
     for tipo, m in detail.per_class.items():
-        print(f"  {tipo.value:<14} P={m.precision:.3f} R={m.recall:.3f} F1={m.f1:.3f} (n={m.support})")
+        print(
+            f"  {tipo.value:<14} P={m.precision:.3f} R={m.recall:.3f} F1={m.f1:.3f} (n={m.support})"
+        )
     print(f"\n{len(detail.errors)} errores de {detail.name}")
     for error in detail.errors:
         print(f"  {error}")
