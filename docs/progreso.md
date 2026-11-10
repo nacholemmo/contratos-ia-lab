@@ -461,3 +461,18 @@ Plantilla para cada entrada (copiar y completar):
   - La ficha del DNI es una hoja A4, no una tarjeta: la foto se ve como un papel. Revisarlo si el clasificador o el extractor dependen del formato.
   - Los niveles están calibrados a ojo con una sola página. Recalibrarlos con fotos reales, que no van al repo, cuando las haya.
   - Hay fotos y nombres, pero todavía no se arman en un legajo con su `LegajoEsperado`: eso es de los pasos 4 y 7.
+
+### 2026-11-10 — Fase 3, paso 4: legajo de evaluación y de cierre
+- **Qué construí:** `synthetic/fotografiado.py` y, en `recibo.py`, `generate_recibos_meses`.
+  - `generate_recibos_meses` (Claude): los últimos 3 recibos de una persona, de meses consecutivos, con el mismo empleador y sueldo. Cada mes se imprime con su sub-fuente, y la fecha de ingreso queda antes del recibo más viejo.
+  - `documentos_del_legajo` (Claude): en evaluación, el DNI de inquilinos y garantes, 3 recibos por inquilino, a veces también los del garante (50 %), y el título de cada garante o la caución. En cierre se suman el contrato y el seguro. El contrato de la semilla no se entrega en evaluación: de él sale solo el alquiler propuesto.
+  - `generate_legajo` (Claude): una foto por página con nombres consecutivos, el JSON de los datos de cada documento y el `LegajoEsperado` con personas (`p1`, `p2`…), documentos (`d1`, `d2`…) y la alerta de ingreso insuficiente.
+  - `ingreso_insuficiente` (mi intento; Claude lo corrigió a pedido mío): suma el neto del recibo más reciente de cada inquilino y lo compara con `INGRESO_MINIMO_EN_ALQUILERES` (3) alquileres. Sin recibos no hay alerta: es un faltante.
+  - **Verificado:** `uv run pytest packages/synthetic/tests/test_fotografiado.py`, 20 passed.
+- **Qué aprendí:**
+  - **Unidades del dinero:** mi primer intento sumaba los 3 recibos (el ingreso de tres meses) y lo comparaba con 3 alquileres de un mes. No tiraba ninguna excepción: daba una alerta equivocada. Lo atrapó el test de un centavo menos.
+  - **Los inquilinos alquilan juntos:** la regla compara la suma de sus ingresos una sola vez, no a cada inquilino por separado.
+  - **Faltante ≠ alerta:** sin recibos no se puede medir el ingreso. Eso es un documento faltante, no un ingreso insuficiente.
+- **Dudas abiertas:**
+  - Más reciente o promedio de 3 meses: el promedio suaviza el aguinaldo. Puede volverse un requisito configurable en la Fase 5.
+  - Las fotos salen ordenadas y sin intrusas ni duplicadas: eso es el paso 5.

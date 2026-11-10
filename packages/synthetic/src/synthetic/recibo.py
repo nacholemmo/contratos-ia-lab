@@ -18,7 +18,7 @@ from synthetic.cases import CasoDificil
 from synthetic.contracts import ALQUILER_ARS_POR_ANIO
 from synthetic.dni import dni_de, sumar_anios
 from synthetic.identity import cuit_empresa, cuit_from_dni
-from synthetic.legajo import ContextoLegajo, contexto_legajo
+from synthetic.legajo import ContextoLegajo, contexto_legajo, sumar_meses
 from synthetic.pdf import ContratoPDF, marcar_sintetico
 from synthetic.source import Source
 from synthetic.wording import MESES
@@ -94,9 +94,13 @@ def fecha_ingreso(nacimiento: date, periodo: date, source: Source) -> date:
 
 
 def generate_recibo_data(
-    contexto: ContextoLegajo, persona_id: UUID, source: Source
+    contexto: ContextoLegajo, persona_id: UUID, source: Source, meses: int = 1
 ) -> tuple[ReciboSueldo, list[Decimal]]:
-    """Datos del recibo (sin evidencia) y el detalle de aportes para imprimir."""
+    """Datos del recibo del último mes (sin evidencia) y el detalle de aportes para imprimir.
+
+    `meses`: cuántos recibos se van a presentar. La fecha de ingreso queda antes del más
+    viejo (nadie cobra un sueldo antes de entrar). Con 1, el resultado no cambia.
+    """
     identidad = contexto.identidades[persona_id]
     persona = identidad.persona
     if persona.dni is None:
@@ -113,7 +117,9 @@ def generate_recibo_data(
         # deriva del DNI, así que coincide con el del contrato cuando figura.
         empleado_cuil=cuit_from_dni(persona.dni, identidad.sexo),
         periodo=f"{periodo:%Y-%m}",
-        fecha_ingreso=fecha_ingreso(dni.fecha_nacimiento, periodo, source),
+        fecha_ingreso=fecha_ingreso(
+            dni.fecha_nacimiento, sumar_meses(periodo, -(meses - 1)), source
+        ),
         remuneracion_bruta=bruto,
         total_descuentos=sum(aportes),
         neto=neto,
@@ -224,3 +230,27 @@ def generate_recibos(
         p.id: generate_recibo_doc(contexto, p.id, Source(seed).derive(f"recibo:{p.id}"))
         for p in contexto.partes(Rol.INQUILINO)
     }
+
+
+# Recibos que pide una inmobiliaria por persona: los últimos tres.
+RECIBOS_POR_PERSONA = 3
+
+
+def generate_recibos_meses(
+    contexto: ContextoLegajo, persona_id: UUID, source: Source, meses: int = RECIBOS_POR_PERSONA
+) -> list[tuple[bytes, ReciboSueldo]]:
+    """Los últimos `meses` recibos de una persona, del más reciente al más viejo.
+
+    Mismo empleador, mismo sueldo y mismos aportes; cambia el período. Cada mes se imprime
+    con su propia sub-fuente (otra forma de escribir fechas y montos, como un recibo real
+    de un mes a otro).
+    """
+    recibo, aportes = generate_recibo_data(contexto, persona_id, source, meses)
+    ultimo = date.fromisoformat(f"{recibo.periodo}-01")
+    documentos = []
+    for k in range(meses):
+        datos = recibo.model_copy(update={"periodo": f"{sumar_meses(ultimo, -k):%Y-%m}"})
+        pdf, valores = render_recibo(datos, aportes, source.derive(f"mes:{k}"))
+        update = {f"{c}_evidencia": Evidencia(texto=t, pagina=1) for c, t in valores.items()}
+        documentos.append((pdf, datos.model_copy(update=update)))
+    return documentos

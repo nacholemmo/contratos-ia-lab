@@ -151,7 +151,7 @@ Pasos:
    brillo desparejo, desenfoque, recorte de bordes y fondo. JPG con rotación EXIF y
    nombres que no dicen nada (`IMG_4821.jpg`). Dos niveles (leve y fuerte) y alguna foto
    ilegible a propósito. Reutiliza `scan.py` y `Source`.
-4. Modo "legajo sin contrato" (etapa 1): DNI de inquilinos y garantes, los últimos 3
+4. ✅ Modo "legajo sin contrato" (etapa 1): DNI de inquilinos y garantes, los últimos 3
    recibos por inquilino (y recibos de garantes, como pasa en la realidad) y título o
    caución. El alquiler propuesto sale del contrato de la semilla, que no se entrega. Modo
    "cierre" (etapa 2): suma el contrato y el seguro.
