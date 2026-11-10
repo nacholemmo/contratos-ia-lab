@@ -435,3 +435,29 @@ Plantilla para cada entrada (copiar y completar):
   - Fase 5: ¿con qué se empareja un dorso cuando hay dos personas del mismo rol? Puede ser el orden de las fotos, el domicilio contra el de los recibos, o marcarlo como dudoso. El ground truth ya tiene la respuesta en `DocumentoEsperado.fotos`.
   - `data/synthetic/` todavía tiene los DNI de una página: hay que regenerarlo. Las corridas de la Fase 2 en `data/experimentos/` son del set anterior, con el DNI de una página: el frente nuevo tiene menos datos y otro título, así que los resultados de la Fase 2 valen para ese set, no para el regenerado.
   - La ficha es una página A4, no una tarjeta: revisar en el paso 3 si la foto de una tarjeta necesita otro formato.
+
+### 2026-11-09 — Fase 3, paso 3: cada página como foto de celular
+- **Qué construí:** `synthetic/foto.py`, solo con Pillow y todo el azar desde `Source`.
+  - `fotografiar` convierte una página en una foto en 7 pasos:
+    1. la hoja sobre una mesa con textura;
+    2. perspectiva (transformación `QUAD`);
+    3. giro;
+    4. sombra hacia un borde y reflejo del flash;
+    5. desenfoque;
+    6. recorte de bordes;
+    7. 1.600 px de lado largo.
+  - `NIVELES`: los parámetros de leve, fuerte e ilegible.
+  - `guardar_jpg` guarda los píxeles girados según la orientación EXIF (1, 3, 6 u 8), como un teléfono, y marca la foto como sintética en el EXIF. La escribió Claude, a pedido mío.
+  - `fotografiar_pdf` arma una foto por página, con una sub-fuente por página. `nombres_fotos` genera nombres consecutivos al azar, como `IMG_4821.jpg`.
+  - **Verificado:**
+    - `uv run pytest packages/synthetic/tests/test_foto.py`: 20 passed. Hay ida y vuelta por EXIF en las 4 orientaciones, y la ilegible tiene menos de un cuarto de la nitidez de la leve.
+    - Revisé a ojo una foto por nivel del frente de un DNI: la leve se lee bien, la fuerte se lee torcida y la ilegible no se lee.
+- **Qué aprendí:**
+  - **Una foto no es un escaneo.** Perspectiva, sombra, reflejo, movimiento, mesa y bordes cortados rompen cosas distintas, y los niveles sirven para medir en la Fase 6 cuánto empeora cada uno.
+  - **La trampa del EXIF.** Un teléfono guarda una foto vertical con los píxeles acostados y la orientación en el EXIF. Un servicio que no aplica `exif_transpose` le manda al LLM el documento de costado. Pillow gira en sentido antihorario: la orientación 6 se guarda con `ROTATE_90`.
+  - **`Image.effect_noise` rompe el determinismo:** saca su azar de C. La textura se arma con bytes de `source.rng`, agrandados.
+  - **Una sub-fuente por página:** agregar una página no cambia las fotos de las demás.
+- **Dudas abiertas:**
+  - La ficha del DNI es una hoja A4, no una tarjeta: la foto se ve como un papel. Revisarlo si el clasificador o el extractor dependen del formato.
+  - Los niveles están calibrados a ojo con una sola página. Recalibrarlos con fotos reales, que no van al repo, cuando las haya.
+  - Hay fotos y nombres, pero todavía no se arman en un legajo con su `LegajoEsperado`: eso es de los pasos 4 y 7.

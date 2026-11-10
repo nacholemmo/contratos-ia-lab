@@ -147,7 +147,7 @@ Pasos:
 2. ✅ DNI en frente y dorso: dos fichas de presentación propia (el dorso con el domicilio y
    los datos de emisión), sin imitar el diseño oficial ni su código de barras. La
    evidencia indica la foto (el lado) donde está cada dato.
-3. Modo "legajo fotografiado": cada página como foto de celular, con perspectiva, sombra,
+3. ✅ Modo "legajo fotografiado": cada página como foto de celular, con perspectiva, sombra,
    brillo desparejo, desenfoque, recorte de bordes y fondo. JPG con rotación EXIF y
    nombres que no dicen nada (`IMG_4821.jpg`). Dos niveles (leve y fuerte) y alguna foto
    ilegible a propósito. Reutiliza `scan.py` y `Source`.
