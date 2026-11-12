@@ -19,7 +19,7 @@ from extractor.compare import (
 )
 from extractor.experiment import Sample
 
-C, D, G, S, O = (
+C, D, G, S, OTRO = (
     TipoDocumento.CONTRATO,
     TipoDocumento.DNI,
     TipoDocumento.GARANTIA,
@@ -100,7 +100,7 @@ def test_summarize():
     run = Run(
         "zero-shot",
         "x",
-        predicted={"1.pdf": C, "2.pdf": G, "3.pdf": O, "4.pdf": S},
+        predicted={"1.pdf": C, "2.pdf": G, "3.pdf": OTRO, "4.pdf": S},
         cost_usd={p: Decimal("0.0001") for p in truth},
         latency_s=dict.fromkeys(truth, 1.0),
     )

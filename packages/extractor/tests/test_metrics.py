@@ -5,7 +5,7 @@ import pytest
 from core.models import TipoDocumento
 from extractor.metrics import accuracy, class_metrics, confusion_matrix, macro_f1
 
-G, S, D, C, O = (
+G, S, D, C, OTRO = (
     TipoDocumento.GARANTIA,
     TipoDocumento.SEGURO,
     TipoDocumento.DNI,
@@ -55,13 +55,13 @@ def test_una_respuesta_invalida_baja_el_recall():
 
 
 def test_clase_ausente_y_nunca_predicha_da_cero():
-    m = class_metrics(PAIRS, O)
+    m = class_metrics(PAIRS, OTRO)
     assert (m.precision, m.recall, m.f1, m.support) == (0.0, 0.0, 0.0, 0)
 
 
 def test_clase_predicha_sin_documentos_reales():
     """Un escaneo que sale `otro`: `otro` tiene una falsa alarma y ningún documento real."""
-    m = class_metrics([(C, O), (C, C)], O)
+    m = class_metrics([(C, OTRO), (C, C)], OTRO)
     assert (m.precision, m.recall, m.f1, m.support) == (0.0, 0.0, 0.0, 0)
 
 

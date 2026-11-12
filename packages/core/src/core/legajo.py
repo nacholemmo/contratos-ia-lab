@@ -168,5 +168,3 @@ class LegajoEsperado(BaseModel):
             if f.duplicada_de is not None and f.duplicada_de not in en_documentos:
                 raise ValueError(f"duplicado de una foto que no se conserva: {f.duplicada_de}")
         return self
-            
-

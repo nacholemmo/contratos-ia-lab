@@ -380,15 +380,16 @@ def comparar_clasificadores(argv: list[str] | None = None) -> int:
     print(
         f"{len(pdfs)} documentos comunes ({len(evaluated)} en la prueba, {len(scanned)} escaneos)"
     )
-    for run in runs:
-        print(f"  {run.name:<11} ← {run.source}")
+    for loaded in runs:
+        print(f"  {loaded.name:<11} ← {loaded.source}")
     print(
         f"\n{'enfoque':<11} {'accuracy':>9} {'F1 macro':>9} {'escaneos':>9}"
         f" {'USD/1000':>9} {'latencia':>10}"
     )
     for r in rows:
         print(
-            f"{r.name:<11} {r.accuracy:>9.1%} {r.macro_f1:>9.3f} {r.scanned_correct:>4}/{r.scanned_n:<4}"
+            f"{r.name:<11} {r.accuracy:>9.1%} {r.macro_f1:>9.3f}"
+            f" {r.scanned_correct:>4}/{r.scanned_n:<4}"
             f" {r.usd_per_1000:>9.4f} {r.mean_latency_s * 1000:>8.1f}ms"
         )
 

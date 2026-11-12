@@ -119,7 +119,6 @@ def test_misma_semilla_mismos_dni():
 @pytest.mark.parametrize("seed", SEEDS)
 def test_evidencia_de_cada_dato_en_la_ficha(seed):
     for pdf, dni in generate_dnis(seed).values():
-        texto = _texto(pdf)
         paginas = [p.extract_text() for p in PdfReader(BytesIO(pdf)).pages]
         assert len(paginas) == 2
         for campo in CAMPOS:

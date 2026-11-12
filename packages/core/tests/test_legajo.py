@@ -29,12 +29,25 @@ def legajo_valido() -> dict[str, Any]:
             {"id": "p2", "rol": Rol.GARANTE, "nombre": "Martín Gómez", "dni": "28987654"},
         ],
         "documentos": [
-            {"id": "d1", "tipo": TipoDocumento.DNI, "persona_id": "p1",
-             "fotos": ["IMG_4821.jpg", "IMG_4822.jpg"], "datos": "dni_inquilino_1.json"},
-            {"id": "d2", "tipo": TipoDocumento.RECIBO_SUELDO, "persona_id": "p1",
-             "fotos": ["IMG_4823.jpg"]},
-            {"id": "d3", "tipo": TipoDocumento.GARANTIA, "persona_id": "p2",
-             "fotos": ["IMG_4830.jpg", "IMG_4831.jpg"]},
+            {
+                "id": "d1",
+                "tipo": TipoDocumento.DNI,
+                "persona_id": "p1",
+                "fotos": ["IMG_4821.jpg", "IMG_4822.jpg"],
+                "datos": "dni_inquilino_1.json",
+            },
+            {
+                "id": "d2",
+                "tipo": TipoDocumento.RECIBO_SUELDO,
+                "persona_id": "p1",
+                "fotos": ["IMG_4823.jpg"],
+            },
+            {
+                "id": "d3",
+                "tipo": TipoDocumento.GARANTIA,
+                "persona_id": "p2",
+                "fotos": ["IMG_4830.jpg", "IMG_4831.jpg"],
+            },
         ],  # fmt: skip
         "fotos": [
             {"archivo": "IMG_4823.jpg"},
@@ -42,16 +55,23 @@ def legajo_valido() -> dict[str, Any]:
             {"archivo": "IMG_4819.jpg", "descarte": MotivoDescarte.INTRUSA},
             {"archivo": "IMG_4821.jpg"},
             {"archivo": "IMG_4831.jpg"},
-            {"archivo": "IMG_4824.jpg", "descarte": MotivoDescarte.DUPLICADA,
-             "duplicada_de": "IMG_4823.jpg"},
+            {
+                "archivo": "IMG_4824.jpg",
+                "descarte": MotivoDescarte.DUPLICADA,
+                "duplicada_de": "IMG_4823.jpg",
+            },
             {"archivo": "IMG_4822.jpg"},
         ],  # fmt: skip
         "faltantes": [
             {"tipo": TipoDocumento.DNI, "persona_id": "p2", "detalle": "DNI del garante"},
         ],
         "alertas": [
-            {"tipo": TipoAlerta.INGRESO_INSUFICIENTE, "persona_id": "p1", "documento_ids": ["d2"],
-             "detalle": "El alquiler supera el 30 % del neto"},
+            {
+                "tipo": TipoAlerta.INGRESO_INSUFICIENTE,
+                "persona_id": "p1",
+                "documento_ids": ["d2"],
+                "detalle": "El alquiler supera el 30 % del neto",
+            },
         ],  # fmt: skip
     }
 
