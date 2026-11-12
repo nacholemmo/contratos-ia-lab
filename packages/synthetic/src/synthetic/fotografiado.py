@@ -8,7 +8,7 @@ entrega: todavía no existe. De él sale solo el alquiler propuesto.
 Etapa de cierre: lo mismo, más el contrato y el seguro del inmueble.
 
 Las fotos salen en el orden de los documentos y con nombres consecutivos. Mezclarlas,
-duplicarlas y sumar intrusas es del paso 5.
+duplicarlas y sumar intrusas lo hace `desorden.desordenar`.
 """
 
 from dataclasses import dataclass
@@ -60,6 +60,7 @@ class LegajoGenerado:
     esperado: LegajoEsperado
     fotos: dict[str, bytes]  # archivo → JPG, en el orden en que llegan
     datos: dict[str, BaseModel]  # "dni_inquilino_1.json" → ground truth de sus campos
+    pdfs: dict[str, bytes]  # id del documento ("d3") → PDF, para volver a fotografiarlo
 
 
 def ingreso_insuficiente(alquiler: Decimal, netos: dict[str, list[Decimal]]) -> bool:
@@ -192,4 +193,5 @@ def generate_legajo(
         fotos=[FotoEsperada(archivo=a) for a in fotos],
         alertas=alertas,
     )
-    return LegajoGenerado(esperado=esperado, fotos=fotos, datos=datos)
+    pdfs = {e.id: d.pdf for d, e in zip(docs, documentos, strict=True)}
+    return LegajoGenerado(esperado=esperado, fotos=fotos, datos=datos, pdfs=pdfs)

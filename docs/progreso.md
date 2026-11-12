@@ -476,3 +476,31 @@ Plantilla para cada entrada (copiar y completar):
 - **Dudas abiertas:**
   - Más reciente o promedio de 3 meses: el promedio suaviza el aguinaldo. Puede volverse un requisito configurable en la Fase 5.
   - Las fotos salen ordenadas y sin intrusas ni duplicadas: eso es el paso 5.
+
+### 2026-11-11 — Fase 3, paso 5: el desorden del legajo
+- **Qué construí:**
+  - `synthetic/intrusas.py` (Claude): tres intrusas de clase `otro`, todas con la marca SINTÉTICO.
+    - La factura de un servicio de una empresa ficticia, fotografiada como un documento.
+    - La captura de un chat, dibujada con Pillow, con mensajes fijos sin datos de nadie y sin imitar ninguna aplicación.
+    - Una foto sin documento: la mesa, con sombra, reflejo y movimiento.
+  - `synthetic/desorden.py`: `desordenar(legajo, desorden, nivel)` (Claude) agrega, sobre el legajo prolijo:
+    - duplicadas exactas (los mismos bytes);
+    - documentos sacados de nuevo (cada página nueva es duplicado de su original);
+    - una página movida (ilegible);
+    - intrusas.
+
+    Después mezcla y renombra. `Desorden` define un rango por cada cosa, y `SIN_DESORDEN` deja el legajo como está.
+  - `renombrar` (era mío; lo escribió Claude a pedido mío): aplica el mapa de nombre viejo a nuevo en las fotos, en `duplicada_de` y en las fotos de cada documento, con `model_copy`.
+  - `LegajoGenerado.pdfs`: el PDF de cada documento, para volver a fotografiarlo.
+  - De paso: los avisos de ruff que quedaban de pasos anteriores, y renombré `extractor/tests/test_cli.py` porque chocaba con el de `synthetic` al correr la suite entera.
+  - **Verificado:** `uv run pytest`, toda la suite en verde, con `test_desorden.py` incluido.
+- **Qué aprendí:**
+  - **Renombrar después de mezclar:** si las fotos conservan los nombres del legajo prolijo, la numeración `IMG_xxxx` delata la agrupación, y un clasificador podría acertar sin mirar las fotos. Es una fuga de la respuesta en los datos.
+  - **`model_copy` no valida.** Por eso `desordenar` vuelve a validar el `LegajoEsperado` al final, y `cada_foto_en_un_lugar` atrapa cualquier referencia que quede colgada.
+  - **Una sub-fuente por cada agregado:** subir la cantidad de intrusas no cambia las duplicadas.
+  - **B008:** un valor por defecto se crea una sola vez, cuando se define la función. Se usa una constante del módulo (`DESORDEN_HABITUAL`, que es inmutable).
+  - **pytest sin `__init__.py` en `tests/`:** cada archivo de test necesita un nombre único en todo el repo. `--import-mode=importlib` evita el choque, pero rompe los helpers compartidos como `pdf_fixtures.py`.
+- **Dudas abiertas:**
+  - Se conserva la original y se descarta la copia. Las evals de la Fase 6 tienen que aceptar cualquiera de las dos como la conservada.
+  - La duplicada exacta tiene los mismos bytes, así que el servicio la puede detectar por hash. Un reenvío real por WhatsApp recomprime la foto: evaluar si conviene simular eso.
+  - Falta revisar a ojo una intrusa de cada tipo, sobre todo la captura del chat.
