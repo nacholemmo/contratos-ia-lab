@@ -81,9 +81,12 @@ def _sombra(source: Source, size: tuple[int, int], intensidad: float) -> Image.I
 def _reflejo(source: Source, size: tuple[int, int], intensidad: float) -> Image.Image:
     """Capa para `screen`: una mancha de luz (el flash) en un lugar al azar, negra el resto."""
     lado = round(min(size) * source.rng.uniform(0.5, 0.9))
-    # radial_gradient es 0 en el centro y 255 en el borde: invertido, el centro es el brillo.
+    # radial_gradient es 0 en el centro y 255 en las esquinas: invertido, el centro es el
+    # brillo. En el medio de cada lado vale 181 (74 invertido), así que sin recortar ese
+    # resto la mancha se ve como un cuadrado con bordes duros. Se lleva a 0 en el círculo.
+    borde = 255 - 181
     mancha = ImageOps.invert(Image.radial_gradient("L")).resize((lado, lado))
-    mancha = mancha.point(lambda v: round(v * intensidad))
+    mancha = mancha.point(lambda v: round(max(0, v - borde) * 255 / (255 - borde) * intensidad))
     capa = Image.new("L", size, 0)
     x = source.rng.randint(-lado // 2, size[0] - lado // 2)
     y = source.rng.randint(-lado // 2, size[1] - lado // 2)

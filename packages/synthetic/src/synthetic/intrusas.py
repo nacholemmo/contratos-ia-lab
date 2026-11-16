@@ -9,7 +9,9 @@ interfaz de ninguna aplicación.
 from datetime import date
 from enum import StrEnum
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
+import pypdfium2 as pdfium
+from fpdf import FPDF
+from PIL import ImageChops, ImageFilter
 
 from synthetic.fichas import render_ficha
 from synthetic.foto import (
@@ -23,6 +25,7 @@ from synthetic.foto import (
     guardar_jpg,
     orientacion_al_azar,
 )
+from synthetic.pdf import marcar_sintetico
 from synthetic.source import Source
 from synthetic.wording import MESES
 
@@ -66,26 +69,46 @@ def factura_servicio(source: Source, nivel: Nivel) -> bytes:
 
 
 def captura_chat(source: Source) -> bytes:
-    """Captura de pantalla de un chat: vertical, sin perspectiva y sin rotación EXIF."""
-    rng = source.rng
-    ancho, alto = 720, 1520
-    img = Image.new("RGB", (ancho, alto), (236, 229, 221))
-    draw = ImageDraw.Draw(img)
-    fuente = ImageFont.load_default(size=26)
-    draw.rectangle((0, 0, ancho, 110), fill=(60, 70, 90))
-    draw.text((30, 40), "Inmobiliaria (SINTÉTICO)", fill="white", font=fuente)
+    """Captura de pantalla de un chat: vertical, sin perspectiva y sin rotación EXIF.
 
-    y = 150
+    Se dibuja con fpdf (Helvetica, que trae acentos y es la misma en cualquier máquina) y se
+    rasteriza en color. La fuente por defecto de Pillow no tiene tildes, y una fuente del
+    sistema cambiaría los bytes de una máquina a otra.
+    """
+    rng = source.rng
+    ancho, alto, margen = 100, 210, 4  # mm: proporción de un teléfono
+    pdf = FPDF(format=(ancho, alto))
+    marcar_sintetico(pdf, "Captura de chat")
+    pdf.set_auto_page_break(auto=False)
+    pdf.set_page_background((236, 229, 221))
+    pdf.add_page()
+    pdf.set_fill_color(60, 70, 90)
+    pdf.rect(0, 0, ancho, 15, style="F")
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_text_color(255)
+    pdf.text(margen + 2, 9.5, "Inmobiliaria (SINTÉTICO)")
+
+    pdf.set_font("Helvetica", "", 7.5)
+    pdf.set_text_color(20)
+    y = 22.0
     for mensaje in rng.sample(MENSAJES, rng.randint(3, 6)):
         propio = rng.random() < 0.5
-        izq, _, der, abajo = draw.textbbox((0, 0), mensaje, font=fuente)
-        w, h = der - izq + 40, abajo + 30
-        x = ancho - w - 30 if propio else 30
-        color = (220, 248, 198) if propio else (255, 255, 255)
-        draw.rounded_rectangle((x, y, x + w, y + h), radius=16, fill=color)
-        draw.text((x + 20, y + 15), mensaje, fill=(20, 20, 20), font=fuente)
-        y += h + 25
-    draw.text((30, alto - 60), "SINTÉTICO - captura ficticia", fill=(150, 40, 40), font=fuente)
+        w = pdf.get_string_width(mensaje) + 6
+        x = ancho - w - margen if propio else margen
+        pdf.set_fill_color(*((220, 248, 198) if propio else (255, 255, 255)))
+        pdf.rect(x, y, w, 8, style="F", round_corners=True, corner_radius=2)
+        pdf.text(x + 3, y + 5.2, mensaje)
+        y += 11
+    pdf.set_font("Helvetica", "", 8)
+    pdf.set_text_color(150, 40, 40)
+    pdf.text(margen + 2, alto - 6, "SINTÉTICO - captura ficticia")
+
+    documento = pdfium.PdfDocument(bytes(pdf.output()))
+    try:
+        # 100 mm son 283 puntos: con esta escala, la captura mide 720 px de ancho.
+        img = documento[0].render(scale=720 / (ancho * 72 / 25.4)).to_pil().convert("RGB")
+    finally:
+        documento.close()
     return guardar_jpg(img, orientacion=1, calidad=80)
 
 

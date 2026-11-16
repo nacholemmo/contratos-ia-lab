@@ -503,4 +503,7 @@ Plantilla para cada entrada (copiar y completar):
 - **Dudas abiertas:**
   - Se conserva la original y se descarta la copia. Las evals de la Fase 6 tienen que aceptar cualquiera de las dos como la conservada.
   - La duplicada exacta tiene los mismos bytes, así que el servicio la puede detectar por hash. Un reenvío real por WhatsApp recomprime la foto: evaluar si conviene simular eso.
-  - Falta revisar a ojo una intrusa de cada tipo, sobre todo la captura del chat.
+- **Revisión a ojo (2026-11-16):** una intrusa de cada tipo. Salieron dos defectos:
+  - La fuente por defecto de Pillow no tiene tildes. El chat ahora se dibuja con fpdf (Helvetica, la misma en cualquier máquina) y se rasteriza a color.
+  - El reflejo del flash de `foto.py` (paso 3) se veía como un cuadrado: `radial_gradient` vale 181 en el medio de cada lado, no 255. Ahora la mancha termina en un círculo.
+  - Después de corregirlos, la factura, el chat y la foto sin documento se ven bien.
