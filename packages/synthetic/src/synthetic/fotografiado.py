@@ -21,6 +21,7 @@ from core.legajo import (
     AlertaEsperada,
     DocumentoEsperado,
     Etapa,
+    FaltanteEsperado,
     FotoEsperada,
     LegajoEsperado,
     PersonaEsperada,
@@ -31,6 +32,7 @@ from synthetic.cases import CasoDificil
 from synthetic.dni import generate_dnis
 from synthetic.foto import Nivel, fotografiar_pdf, nombres_fotos
 from synthetic.garantia import generate_caucion, generate_titulos
+from synthetic.inconsistencias import IMPLEMENTADAS, Inconsistencia
 from synthetic.legajo import ContextoLegajo, contexto_legajo
 from synthetic.pdf import generate_sample
 from synthetic.recibo import alquiler_en_pesos, generate_recibos_meses
@@ -61,6 +63,7 @@ class LegajoGenerado:
     fotos: dict[str, bytes]  # archivo → JPG, en el orden en que llegan
     datos: dict[str, BaseModel]  # "dni_inquilino_1.json" → ground truth de sus campos
     pdfs: dict[str, bytes]  # id del documento ("d3") → PDF, para volver a fotografiarlo
+    inconsistencias: list[Inconsistencia]  # las inyectadas; vacío si el legajo cierra
 
 
 def ingreso_insuficiente(alquiler: Decimal, netos: dict[str, list[Decimal]]) -> bool:
@@ -78,6 +81,24 @@ def ingreso_insuficiente(alquiler: Decimal, netos: dict[str, list[Decimal]]) -> 
     if not ultimos:
         return False
     return sum(ultimos, Decimal(0)) < alquiler * INGRESO_MINIMO_EN_ALQUILERES
+
+
+def quitar_documentos(
+    docs: list[DocumentoGenerado], source: Source
+) -> tuple[list[DocumentoGenerado], list[DocumentoGenerado]]:
+    """Inconsistencia DOCUMENTO_FALTANTE: saca del legajo lo que una persona no entregó.
+
+    Devuelve (los que quedan, los quitados). Los quitados son todos del mismo tipo y de la
+    misma persona: con eso se arma el `FaltanteEsperado`. Todo el azar sale de `source`.
+    """
+    # Solo falta lo que entrega una persona (DNI, recibos, título): la caución, el contrato y
+    # el seguro son del legajo y los pide la inmobiliaria, no la persona. Se quita el grupo
+    # entero (los 3 recibos, no uno): "no trajo recibos" es el faltante más claro de medir.
+    grupos = list(dict.fromkeys((d.tipo, d.persona_id) for d in docs if d.persona_id))
+    elegido = source.rng.choice(grupos)
+    restantes = [d for d in docs if (d.tipo, d.persona_id) != elegido]
+    quitados = [d for d in docs if (d.tipo, d.persona_id) == elegido]
+    return restantes, quitados
 
 
 def documentos_del_legajo(contexto: ContextoLegajo, etapa: Etapa) -> list[DocumentoGenerado]:
@@ -122,15 +143,37 @@ def generate_legajo(
     etapa: Etapa = Etapa.EVALUACION,
     nivel: Nivel = Nivel.LEVE,
     casos: list[CasoDificil] | None = None,
+    inconsistencias: list[Inconsistencia] | None = None,
 ) -> LegajoGenerado:
-    """Fotos, datos y ground truth del legajo de la semilla. Misma semilla, mismos bytes."""
+    """Fotos, datos y ground truth del legajo de la semilla. Misma semilla, mismos bytes.
+
+    `inconsistencias`: las que se inyectan; None o vacío, ninguna (el legajo cierra). El set
+    sorteado las pide con `elegir_inconsistencias`.
+    """
     contexto = contexto_legajo(seed, casos)
+    inconsistencias = [i for i in Inconsistencia if i in (inconsistencias or [])]
+    pendientes = [i for i in inconsistencias if i not in IMPLEMENTADAS]
+    if pendientes:
+        raise NotImplementedError(f"inconsistencias sin implementar: {pendientes}")
     docs = documentos_del_legajo(contexto, etapa)
+    faltantes: list[FaltanteEsperado] = []
 
     # Personas en el orden del contrato (inquilinos y garantes), con ids fijos p1, p2…
     partes = contexto.partes(Rol.INQUILINO) + contexto.partes(Rol.GARANTE)
     pid = {p.id: f"p{i}" for i, p in enumerate(partes, 1)}
     identidades = contexto.identidades
+
+    if Inconsistencia.DOCUMENTO_FALTANTE in inconsistencias:
+        docs, quitados = quitar_documentos(docs, Source(seed).derive("faltante"))
+        n = len(quitados)
+        faltantes.append(
+            FaltanteEsperado(
+                tipo=quitados[0].tipo,
+                persona_id=pid[quitados[0].persona_id] if quitados[0].persona_id else None,
+                detalle=f"{n} documento{'s' if n > 1 else ''} de tipo {quitados[0].tipo}",
+            )
+        )
+
     personas = [
         PersonaEsperada(
             id=pid[p.id],
@@ -191,7 +234,8 @@ def generate_legajo(
         personas=personas,
         documentos=documentos,
         fotos=[FotoEsperada(archivo=a) for a in fotos],
+        faltantes=faltantes,
         alertas=alertas,
     )
     pdfs = {e.id: d.pdf for d, e in zip(docs, documentos, strict=True)}
-    return LegajoGenerado(esperado=esperado, fotos=fotos, datos=datos, pdfs=pdfs)
+    return LegajoGenerado(esperado, fotos, datos, pdfs, inconsistencias)

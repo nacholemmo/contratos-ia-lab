@@ -507,3 +507,28 @@ Plantilla para cada entrada (copiar y completar):
   - La fuente por defecto de Pillow no tiene tildes. El chat ahora se dibuja con fpdf (Helvetica, la misma en cualquier máquina) y se rasteriza a color.
   - El reflejo del flash de `foto.py` (paso 3) se veía como un cuadrado: `radial_gradient` vale 181 en el medio de cada lado, no 255. Ahora la mancha termina en un círculo.
   - Después de corregirlos, la factura, el chat y la foto sin documento se ven bien.
+
+### 2026-11-22 — Fase 3, paso 6.1: estructura de las inconsistencias y documento faltante
+El paso 6 se dividió en tres:
+- **6.1:** la estructura y el documento faltante.
+- **6.2:** las inconsistencias de los recibos.
+- **6.3:** DNI vencido, titular que no es el garante, caución corta y el set forzado.
+
+- **Qué construí:**
+  - `synthetic/inconsistencias.py` (Claude):
+    - el enum `Inconsistencia` con las 9 del roadmap y `ALERTA_DE` (el faltante no es una alerta);
+    - `IMPLEMENTADAS`, que crece con cada subpaso, y `P_INCONSISTENCIA` (0,06 cada una);
+    - `es_aplicable` y `elegir_inconsistencias` (el set sorteado).
+  - `generate_legajo(..., inconsistencias=...)` (Claude): inyecta las pedidas, falla si se pide una sin implementar y guarda las inyectadas en `LegajoGenerado.inconsistencias`, no en `LegajoEsperado`.
+  - `quitar_documentos` (era mío; lo escribió Claude a pedido mío): saca todos los documentos de un tipo de una persona (DNI, recibos o título). Con eso se arma el `FaltanteEsperado`.
+  - `tests/test_inconsistencias.py`: el test central parametrizado, "cada inconsistencia inyectada tiene su alerta o su faltante". Las 8 pendientes figuran como `xfail`.
+  - **Verificado:** `uv run pytest packages/synthetic/tests/test_inconsistencias.py`, en verde, con 8 xfailed.
+- **Qué aprendí:**
+  - **Inconsistencia ≠ caso difícil:** el caso difícil es un documento difícil de leer que dice la verdad. La inconsistencia hace que el legajo no cierre. Se inyecta antes de imprimir, para que el dato roto esté en el PDF y en el JSON a la vez.
+  - **Se sortea siempre, aunque no aplique:** así, agregar una inconsistencia no cambia los legajos viejos.
+  - **`dict.fromkeys` como set ordenado:** con un `set`, el orden de los grupos podría cambiar, `rng.choice` elegiría otro y se rompería el determinismo.
+  - **Faltante y alerta encajan:** sin los recibos del inquilino no hay alerta de ingreso, que es la regla del paso 4.
+  - **pydantic 2.14 no deja instanciar `BaseModel()`:** para datos de mentira en un test hace falta una subclase.
+- **Dudas abiertas:**
+  - Por ahora se quita el grupo entero. "Trajo 2 de 3 recibos" puede ser una variante cuando los requisitos sean configurables (Fase 5).
+  - En la etapa de cierre, ¿puede faltar el contrato o el seguro? Hoy no, porque los gestiona la inmobiliaria.
