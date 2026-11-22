@@ -6,6 +6,7 @@ el alquiler es una fracción creíble del neto, para que en la Fase 4 se pueda e
 relación alquiler/ingreso que mira una inmobiliaria.
 """
 
+from collections.abc import Callable
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
@@ -71,9 +72,14 @@ def alquiler_en_pesos(contrato: Contrato) -> Decimal:
     return Decimal((minimo + maximo) // 2)
 
 
-def montos(alquiler: Decimal, source: Source) -> tuple[Decimal, list[Decimal], Decimal]:
-    """Bruto, cada aporte y neto. El neto es exactamente bruto - suma de aportes."""
-    proporcion = Decimal(str(round(source.rng.uniform(*ALQUILER_SOBRE_NETO), 3)))
+def montos(
+    alquiler: Decimal, source: Source, rango: tuple[float, float] = ALQUILER_SOBRE_NETO
+) -> tuple[Decimal, list[Decimal], Decimal]:
+    """Bruto, cada aporte y neto. El neto es exactamente bruto - suma de aportes.
+
+    `rango`: alquiler / neto, mínimo y máximo (la inconsistencia de ingreso insuficiente
+    pide uno más alto)."""
+    proporcion = Decimal(str(round(source.rng.uniform(*rango), 3)))
     neto_objetivo = alquiler / proporcion
     bruto = _centavos(neto_objetivo / (1 - TOTAL_APORTES))
     aportes = [_centavos(bruto * tasa) for _, tasa in APORTES]
@@ -94,7 +100,11 @@ def fecha_ingreso(nacimiento: date, periodo: date, source: Source) -> date:
 
 
 def generate_recibo_data(
-    contexto: ContextoLegajo, persona_id: UUID, source: Source, meses: int = 1
+    contexto: ContextoLegajo,
+    persona_id: UUID,
+    source: Source,
+    meses: int = 1,
+    rango: tuple[float, float] = ALQUILER_SOBRE_NETO,
 ) -> tuple[ReciboSueldo, list[Decimal]]:
     """Datos del recibo del último mes (sin evidencia) y el detalle de aportes para imprimir.
 
@@ -108,7 +118,7 @@ def generate_recibo_data(
     # La misma fecha de nacimiento que su ficha de DNI: el legajo es coherente.
     dni = dni_de(contexto, persona_id)
     periodo = periodo_liquidado(contexto.referencia)
-    bruto, aportes, neto = montos(alquiler_en_pesos(contexto.limpio), source)
+    bruto, aportes, neto = montos(alquiler_en_pesos(contexto.limpio), source, rango)
     recibo = ReciboSueldo(
         empleador=source.rng.choice(EMPLEADORES),
         empleador_cuit=cuit_empresa(source.rng),
@@ -236,20 +246,41 @@ def generate_recibos(
 RECIBOS_POR_PERSONA = 3
 
 
+# Cambio que se le hace a los datos de un mes antes de imprimirlo (una inconsistencia):
+# recibe el número de recibo presentado (0 es el más reciente) y sus datos.
+Ajuste = Callable[[int, ReciboSueldo], ReciboSueldo]
+
+
 def generate_recibos_meses(
-    contexto: ContextoLegajo, persona_id: UUID, source: Source, meses: int = RECIBOS_POR_PERSONA
+    contexto: ContextoLegajo,
+    persona_id: UUID,
+    source: Source,
+    meses: int = RECIBOS_POR_PERSONA,
+    desfase: int = 0,
+    rango: tuple[float, float] = ALQUILER_SOBRE_NETO,
+    ajustar: Ajuste | None = None,
 ) -> list[tuple[bytes, ReciboSueldo]]:
     """Los últimos `meses` recibos de una persona, del más reciente al más viejo.
 
     Mismo empleador, mismo sueldo y mismos aportes; cambia el período. Cada mes se imprime
     con su propia sub-fuente (otra forma de escribir fechas y montos, como un recibo real
     de un mes a otro).
+
+    Para las inconsistencias (con los valores por defecto, nada cambia):
+    - `desfase`: cuántos meses recientes se saltean (recibos viejos). La fecha de ingreso
+      sigue quedando antes del más viejo, porque se generan `meses + desfase`.
+    - `rango`: alquiler / neto (ingreso insuficiente).
+    - `ajustar`: cambia los datos de cada mes antes de imprimirlos, así el PDF y el JSON
+      dicen lo mismo.
     """
-    recibo, aportes = generate_recibo_data(contexto, persona_id, source, meses)
+    recibo, aportes = generate_recibo_data(contexto, persona_id, source, meses + desfase, rango)
     ultimo = date.fromisoformat(f"{recibo.periodo}-01")
     documentos = []
     for k in range(meses):
-        datos = recibo.model_copy(update={"periodo": f"{sumar_meses(ultimo, -k):%Y-%m}"})
+        periodo = sumar_meses(ultimo, -(k + desfase))
+        datos = recibo.model_copy(update={"periodo": f"{periodo:%Y-%m}"})
+        if ajustar is not None:
+            datos = ajustar(k, datos)
         pdf, valores = render_recibo(datos, aportes, source.derive(f"mes:{k}"))
         update = {f"{c}_evidencia": Evidencia(texto=t, pagina=1) for c, t in valores.items()}
         documentos.append((pdf, datos.model_copy(update=update)))

@@ -532,3 +532,23 @@ El paso 6 se dividió en tres:
 - **Dudas abiertas:**
   - Por ahora se quita el grupo entero. "Trajo 2 de 3 recibos" puede ser una variante cuando los requisitos sean configurables (Fase 5).
   - En la etapa de cierre, ¿puede faltar el contrato o el seguro? Hoy no, porque los gestiona la inmobiliaria.
+
+### 2026-11-22 — Fase 3, paso 6.2: inconsistencias de los recibos
+- **Qué construí:**
+  - `recibo.py` (Claude): `generate_recibos_meses` suma tres puntos de inyección: `desfase` (meses recientes que se saltean), `rango` (alquiler / neto) y `ajustar` (cambia los datos de cada mes antes de imprimirlo). Con los valores por defecto, nada cambia.
+  - `inconsistencias.py` (Claude):
+    - `PlanRecibos` y `plan_recibos`: qué se le rompe a los recibos del inquilino objetivo (`objetivo_recibos`).
+    - Las cinco inyecciones: recibos de otra persona, CUIL ajeno, recibo viejo (el último de hace 5 a 11 meses), neto que no cierra (en un solo recibo) e ingreso insuficiente forzado (baja el sueldo de todos los inquilinos).
+    - `compatibles`: con los recibos de otra persona no se inyecta además el CUIL ajeno.
+    - `ANTIGUEDAD_MAXIMA_RECIBO_MESES = 3` (regla fija hasta la Fase 5).
+  - `correr_neto` (era mío; lo escribió Claude a pedido mío): infla el neto entre un 5 % y un 30 %, como un recibo adulterado para mostrar más ingreso.
+  - `fotografiado.py`: cada `DocumentoGenerado` lleva sus alertas, y `generate_legajo` las agrupa en `AlertaEsperada` por tipo y persona. `quitar_documentos` no saca documentos con alertas ni grupos protegidos.
+  - **Verificado:** `uv run pytest packages/synthetic/tests/test_inconsistencias.py`, en verde, con 3 xfailed (las del 6.3).
+- **Qué aprendí:**
+  - **Romper un dato sin romper otros:** para un recibo viejo se generan `meses + desfase` y se quedan los más viejos. Si solo se restaran meses al período, la fecha de ingreso quedaría después del recibo y aparecería una inconsistencia no inyectada.
+  - **Una inconsistencia puede borrar a otra:** el faltante podía sacar justo el recibo con el neto roto. La etiqueta tiene que coincidir siempre con la alerta (`protegidos`, `compatibles`).
+  - **`Decimal(str(round(x, 3)))`:** `Decimal(1.15)` guarda el binario del float (1.1499…), y con dinero eso se nota en los centavos.
+  - **Neto inflado e ingreso:** un neto adulterado puede tapar un ingreso insuficiente. El cruce de la Fase 5 tiene que desconfiar del neto antes de calcular el ingreso.
+- **Dudas abiertas:**
+  - En el recibo de otra persona, el documento queda asignado al inquilino que lo presentó. Revisarlo cuando se defina la asignación en la Fase 5.
+  - Si a un legajo le tocan muchas inconsistencias, puede no quedar ningún grupo para quitar. Resolverlo en el 6.3, cuando se sumen las del DNI y la garantía.
