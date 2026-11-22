@@ -34,11 +34,16 @@ from synthetic.foto import Nivel, fotografiar_pdf, nombres_fotos
 from synthetic.garantia import generate_caucion, generate_titulos
 from synthetic.inconsistencias import (
     DETALLE_ALERTA,
-    IMPLEMENTADAS,
     Inconsistencia,
     PlanRecibos,
+    acortar_caucion,
     compatibles,
+    es_aplicable,
+    objetivo_dni,
+    objetivo_titulo,
     plan_recibos,
+    titulo_ajeno,
+    vencer_dni,
 )
 from synthetic.legajo import ContextoLegajo, contexto_legajo
 from synthetic.pdf import generate_sample
@@ -112,6 +117,8 @@ def quitar_documentos(
     grupos = list(
         dict.fromkeys((d.tipo, d.persona_id) for d in docs_candidatos if d.persona_id)
     )
+    if not grupos:  # todo tiene una alerta: no hay nada que pueda faltar
+        return list(docs), []
     elegido = source.rng.choice(grupos)
     restantes = [d for d in docs if (d.tipo, d.persona_id) != elegido]
     quitados = [d for d in docs if (d.tipo, d.persona_id) == elegido]
@@ -123,14 +130,36 @@ def documentos_del_legajo(
 ) -> list[DocumentoGenerado]:
     """Los documentos de la etapa, agrupados por persona: inquilinos, garantes y el legajo.
 
-    Las inconsistencias de los recibos se inyectan acá, antes de imprimir cada recibo."""
+    Las inconsistencias se inyectan acá, sobre los datos de cada documento y antes de
+    imprimirlo; cada documento roto lleva la alerta que tiene que levantar."""
     inconsistencias = inconsistencias or []
     seed, casos = contexto.seed, contexto.casos
     inquilinos = contexto.partes(Rol.INQUILINO)
     garantes = contexto.partes(Rol.GARANTE)
     rol_n = {p.id: f"{p.rol}_{i}" for rol in (inquilinos, garantes) for i, p in enumerate(rol, 1)}
-    dnis = generate_dnis(seed, casos)
-    titulos = generate_titulos(seed, casos)
+
+    # Documento con una alerta inyectada: (tipo de documento, persona) → alerta.
+    rotos: dict[tuple[TipoDocumento, UUID | None], TipoAlerta] = {}
+    ajustes_dni = {}
+    if Inconsistencia.DNI_VENCIDO in inconsistencias:
+        persona = objetivo_dni(contexto)
+        sub = Source(seed).derive("dni_vencido")
+        ajustes_dni[persona] = lambda dni: vencer_dni(dni, contexto.referencia, sub)
+        rotos[(TipoDocumento.DNI, persona)] = TipoAlerta.DNI_VENCIDO
+    ajustes_titulo = {}
+    if Inconsistencia.TITULAR_NO_ES_GARANTE in inconsistencias:
+        garante = objetivo_titulo(contexto)
+        sub_titulo = Source(seed).derive("titulo_ajeno")
+        ajustes_titulo[garante] = lambda titulo: titulo_ajeno(titulo, sub_titulo)
+        rotos[(TipoDocumento.GARANTIA, garante)] = TipoAlerta.TITULAR_NO_ES_GARANTE
+    ajuste_caucion = None
+    if Inconsistencia.CAUCION_MAS_CORTA_QUE_EL_PLAZO in inconsistencias:
+        sub_caucion = Source(seed).derive("caucion_corta")
+        ajuste_caucion = lambda poliza: acortar_caucion(poliza, sub_caucion)  # noqa: E731
+        rotos[(TipoDocumento.GARANTIA, None)] = TipoAlerta.CAUCION_MAS_CORTA_QUE_EL_PLAZO
+
+    dnis = generate_dnis(seed, casos, ajustes_dni)
+    titulos = generate_titulos(seed, casos, ajustes_titulo)
     docs: list[DocumentoGenerado] = []
 
     def agregar(
@@ -141,6 +170,8 @@ def documentos_del_legajo(
         pid: UUID | None,
         alertas: tuple[TipoAlerta, ...] = (),
     ):
+        if (tipo, pid) in rotos:
+            alertas = (*alertas, rotos[(tipo, pid)])
         docs.append(DocumentoGenerado(tipo, nombre, pdf, datos, pid, alertas))
 
     def recibos(persona_id: UUID, plan: PlanRecibos) -> None:
@@ -167,7 +198,7 @@ def documentos_del_legajo(
             recibos(p.id, PlanRecibos())
         agregar(TipoDocumento.GARANTIA, f"titulo_{rol_n[p.id]}", *titulos[p.id], p.id)
 
-    caucion = generate_caucion(seed, casos)
+    caucion = generate_caucion(seed, casos, ajuste_caucion)
     if caucion is not None:
         agregar(TipoDocumento.GARANTIA, "caucion", *caucion, None)
     if etapa == Etapa.CIERRE:
@@ -190,9 +221,10 @@ def generate_legajo(
     """
     contexto = contexto_legajo(seed, casos)
     inconsistencias = compatibles(inconsistencias or [])
-    pendientes = [i for i in inconsistencias if i not in IMPLEMENTADAS]
-    if pendientes:
-        raise NotImplementedError(f"inconsistencias sin implementar: {pendientes}")
+    # Pedir una que no puede darse (un título sin garantes) dejaría una etiqueta sin alerta.
+    no_aplican = [i for i in inconsistencias if not es_aplicable(i, contexto)]
+    if no_aplican:
+        raise ValueError(f"inconsistencias que no aplican a la semilla {seed}: {no_aplican}")
     docs = documentos_del_legajo(contexto, etapa, inconsistencias)
     faltantes: list[FaltanteEsperado] = []
 
@@ -201,6 +233,7 @@ def generate_legajo(
     pid = {p.id: f"p{i}" for i, p in enumerate(partes, 1)}
     identidades = contexto.identidades
 
+    quitados: list[DocumentoGenerado] = []
     if Inconsistencia.DOCUMENTO_FALTANTE in inconsistencias:
         # Con ingreso insuficiente inyectado, los recibos de los inquilinos no pueden faltar.
         protegidos = frozenset(
@@ -209,6 +242,10 @@ def generate_legajo(
             if Inconsistencia.INGRESO_INSUFICIENTE in inconsistencias
         )
         docs, quitados = quitar_documentos(docs, Source(seed).derive("faltante"), protegidos)
+    if Inconsistencia.DOCUMENTO_FALTANTE in inconsistencias and not quitados:
+        # Todo lo que se podía quitar tenía una alerta: el faltante no se inyecta.
+        inconsistencias = [i for i in inconsistencias if i != Inconsistencia.DOCUMENTO_FALTANTE]
+    elif Inconsistencia.DOCUMENTO_FALTANTE in inconsistencias:
         n = len(quitados)
         faltantes.append(
             FaltanteEsperado(

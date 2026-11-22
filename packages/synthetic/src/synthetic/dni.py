@@ -9,6 +9,7 @@ Cada DNI sale de la `Identidad` de una parte del contrato (mismo número, nombre
 así el legajo es coherente y en la Fase 4 se pueden evaluar los cruces entre documentos.
 """
 
+from collections.abc import Callable
 from datetime import date, timedelta
 from enum import IntEnum
 from uuid import UUID
@@ -197,10 +198,19 @@ def render_ficha(dni: DNI, source: Source) -> tuple[bytes, dict[str, str]]:
 
 
 def generate_dni_doc(
-    identidad: Identidad, fecha_referencia: date, source: Source, provincia_inmueble: str
+    identidad: Identidad,
+    fecha_referencia: date,
+    source: Source,
+    provincia_inmueble: str,
+    ajustar: Callable[[DNI], DNI] | None = None,
 ) -> tuple[bytes, DNI]:
-    """PDF de la ficha y su ground truth con evidencia: la página es el lado donde está el dato."""
+    """PDF de la ficha y su ground truth con evidencia: la página es el lado donde está el dato.
+
+    `ajustar` cambia los datos antes de imprimirlos (una inconsistencia, como el DNI vencido).
+    """
     dni = generate_dni_data(identidad, fecha_referencia, source, provincia_inmueble)
+    if ajustar is not None:
+        dni = ajustar(dni)
     pdf, valores = render_ficha(dni, source)
     update = {
         f"{c}_evidencia": Evidencia(texto=v, pagina=LADOS[c].value) for c, v in valores.items()
@@ -225,7 +235,9 @@ def dni_de(contexto: ContextoLegajo, persona_id: UUID) -> DNI:
 
 
 def generate_dnis(
-    seed: int, casos: list[CasoDificil] | None = None
+    seed: int,
+    casos: list[CasoDificil] | None = None,
+    ajustes: dict[UUID, Callable[[DNI], DNI]] | None = None,
 ) -> dict[UUID, tuple[bytes, DNI]]:
     """Ficha de DNI de cada parte que firma el contrato de la semilla (por `Persona.id`).
 
@@ -241,6 +253,7 @@ def generate_dnis(
             contexto.referencia,
             fuente_dni(seed, p.id),
             contexto.limpio.propiedad.provincia,
+            (ajustes or {}).get(p.id),
         )
         for p in contexto.partes()
     }

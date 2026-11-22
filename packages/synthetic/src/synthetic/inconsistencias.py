@@ -13,15 +13,18 @@ manifest, no en `LegajoEsperado` (que describe el legajo, no cómo se fabricó).
 """
 
 from dataclasses import dataclass
+from datetime import date, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
 
 from core.legajo import TipoAlerta
-from core.models import ReciboSueldo, Rol, Sexo
-from synthetic.cases import CasoDificil
+from core.models import DNI, PolizaCaucion, ReciboSueldo, Rol, Sexo, TituloPropiedad
+from synthetic.cases import CasoDificil, es_aplicable as caso_aplicable
+from synthetic.contracts import generate_contrato
+from synthetic.dni import VIGENCIA_DNI_ANIOS, sumar_anios
 from synthetic.identity import cuit_from_dni, generate_dni
-from synthetic.legajo import ContextoLegajo
+from synthetic.legajo import ContextoLegajo, contexto_legajo, sumar_meses
 from synthetic.recibo import ALQUILER_SOBRE_NETO, _centavos
 from synthetic.source import Source
 
@@ -55,33 +58,12 @@ ALERTA_DE: dict[Inconsistencia, TipoAlerta | None] = {
 DETALLE_ALERTA: dict[TipoAlerta, str] = {
     TipoAlerta.RECIBO_DE_OTRA_PERSONA: "Los recibos son de una persona que no está en el legajo",
     TipoAlerta.CUIL_NO_CORRESPONDE_AL_DNI: "El CUIL de los recibos no corresponde al DNI",
-    TipoAlerta.RECIBO_VIEJO: "El último recibo es de hace más de "
-    f"{3} meses",  # ANTIGUEDAD_MAXIMA_RECIBO_MESES, abajo
+    TipoAlerta.RECIBO_VIEJO: "El último recibo es de hace más de 3 meses",
     TipoAlerta.NETO_NO_CIERRA: "El neto no es el bruto menos los descuentos",
+    TipoAlerta.DNI_VENCIDO: "El DNI está vencido",
+    TipoAlerta.TITULAR_NO_ES_GARANTE: "El titular del inmueble no es el garante",
+    TipoAlerta.CAUCION_MAS_CORTA_QUE_EL_PLAZO: "La caución vence antes que el contrato",
 }
-
-# Las que ya se inyectan (pasos 6.1 y 6.2). Las demás llegan en 6.3.
-IMPLEMENTADAS = frozenset(
-    {
-        Inconsistencia.RECIBO_DE_OTRA_PERSONA,
-        Inconsistencia.CUIL_NO_CORRESPONDE_AL_DNI,
-        Inconsistencia.RECIBO_VIEJO,
-        Inconsistencia.NETO_NO_CIERRA,
-        Inconsistencia.INGRESO_INSUFICIENTE,
-        Inconsistencia.DOCUMENTO_FALTANTE,
-    }
-)
-
-# Las que rompen los recibos de un inquilino.
-DE_RECIBOS = frozenset(
-    {
-        Inconsistencia.RECIBO_DE_OTRA_PERSONA,
-        Inconsistencia.CUIL_NO_CORRESPONDE_AL_DNI,
-        Inconsistencia.RECIBO_VIEJO,
-        Inconsistencia.NETO_NO_CIERRA,
-        Inconsistencia.INGRESO_INSUFICIENTE,
-    }
-)
 
 # Regla fija del generador (en la Fase 5 llega con los requisitos): el último recibo tiene
 # que ser de hace a lo sumo 3 meses. El normal es el del mes anterior a la firma (1 mes).
@@ -92,6 +74,10 @@ DESFASE_VIEJO = (4, 10)
 # inquilinos. Con n inquilinos, cada neto queda por debajo de 3 alquileres / (1,08 n), y la
 # suma, por debajo de 2,78 alquileres: no alcanza nunca.
 ALQUILER_SOBRE_NETO_INSUFICIENTE = (0.36, 0.50)
+# DNI vencido: venció entre 1 mes y 3 años antes de la fecha del legajo.
+VENCIDO_HACE_DIAS = (30, 3 * 365)
+# Caución corta: vence entre 1 y 12 meses antes del fin del contrato.
+CAUCION_CORTA_MESES = (1, 12)
 
 # Probabilidad de cada una por legajo. Con 9 sorteos independientes a 0,06, cerca del 57 %
 # de los legajos sale sin ninguna (0,94⁹): el set sorteado sigue siendo mayormente sano.
@@ -110,14 +96,14 @@ def es_aplicable(inconsistencia: Inconsistencia, contexto: ContextoLegajo) -> bo
 
 
 def elegir_inconsistencias(contexto: ContextoLegajo) -> list[Inconsistencia]:
-    """Las que le tocan a este legajo (set sorteado), solo entre las implementadas y
-    aplicables, en el orden del enum."""
+    """Las que le tocan a este legajo (set sorteado), solo entre las aplicables, en el orden
+    del enum."""
     source = Source(contexto.seed).derive("inconsistencias")
     elegidas = []
     for inconsistencia, p in P_INCONSISTENCIA.items():
         # Se sortea siempre, aunque no aplique: así agregar una no corre las demás.
         sale = source.rng.random() < p
-        if sale and inconsistencia in IMPLEMENTADAS and es_aplicable(inconsistencia, contexto):
+        if sale and es_aplicable(inconsistencia, contexto):
             elegidas.append(inconsistencia)
     return compatibles(elegidas)
 
@@ -137,12 +123,27 @@ def compatibles(inconsistencias: list[Inconsistencia]) -> list[Inconsistencia]:
 # --- recibos (paso 6.2) ---
 
 
-def otra_persona(source: Source) -> tuple[str, str]:
-    """Empleado y CUIL de alguien que no está en el legajo (ej. la pareja del inquilino)."""
-    sexo = source.rng.choice(list(Sexo))
+@dataclass(frozen=True)
+class PersonaAjena:
+    """Alguien que no está en el legajo (la pareja del inquilino, un familiar del garante)."""
+
+    nombre: str
+    apellido: str
+    dni: str
+    sexo: Sexo
+
+
+def persona_ajena(source: Source) -> PersonaAjena:
+    sexo = source.rng.choice([Sexo.M, Sexo.F])
     fake = source.fake
     nombre = fake.first_name_male() if sexo == Sexo.M else fake.first_name_female()
-    return f"{fake.last_name()}, {nombre}".upper(), cuit_from_dni(generate_dni(source.rng), sexo)
+    return PersonaAjena(nombre, fake.last_name(), generate_dni(source.rng), sexo)
+
+
+def otra_persona(source: Source) -> tuple[str, str]:
+    """Empleado y CUIL de alguien que no está en el legajo, como figuran en un recibo."""
+    p = persona_ajena(source)
+    return f"{p.apellido}, {p.nombre}".upper(), cuit_from_dni(p.dni, p.sexo)
 
 
 def cuil_ajeno(propio: str, source: Source) -> str:
@@ -233,3 +234,79 @@ def plan_recibos(
     if Inconsistencia.NETO_NO_CIERRA in inconsistencias:
         plan["mes_neto"] = rng.randrange(3)
     return PlanRecibos(alertas=tuple(alertas), **plan)
+
+
+# --- DNI, título y caución (paso 6.3) ---
+
+
+def vencer_dni(dni: DNI, referencia: date, source: Source) -> DNI:
+    """Inconsistencia DNI_VENCIDO: el mismo DNI, vencido a la fecha del legajo.
+
+    Se corren la emisión y el vencimiento juntos (15 años de vigencia), para que el único
+    dato que no cierre sea el vencimiento contra la fecha del legajo.
+    """
+    vencimiento = referencia - timedelta(days=source.rng.randint(*VENCIDO_HACE_DIAS))
+    emision = sumar_anios(vencimiento, -VIGENCIA_DNI_ANIOS)
+    return dni.model_copy(update={"fecha_emision": emision, "fecha_vencimiento": vencimiento})
+
+
+def titulo_ajeno(titulo: TituloPropiedad, source: Source) -> TituloPropiedad:
+    """Inconsistencia TITULAR_NO_ES_GARANTE: el título de un inmueble de otra persona."""
+    p = persona_ajena(source)
+    return titulo.model_copy(
+        update={"titular": f"{p.nombre} {p.apellido.upper()}", "titular_dni": p.dni}
+    )
+
+
+def acortar_caucion(poliza: PolizaCaucion, source: Source) -> PolizaCaucion:
+    """Inconsistencia CAUCION_MAS_CORTA_QUE_EL_PLAZO: la póliza vence antes que el contrato.
+
+    Siempre después del inicio: una póliza que vence antes de empezar no sería creíble.
+    """
+    hasta = poliza.vigencia_hasta
+    desde = poliza.vigencia_desde
+    if hasta is None or desde is None:
+        raise ValueError("la caución no tiene vigencia")
+    corta = sumar_meses(hasta, -source.rng.randint(*CAUCION_CORTA_MESES))
+    return poliza.model_copy(update={"vigencia_hasta": max(corta, desde + timedelta(days=30))})
+
+
+def objetivo_dni(contexto: ContextoLegajo) -> UUID:
+    """La persona (inquilino o garante) cuyo DNI está vencido."""
+    partes = contexto.partes(Rol.INQUILINO) + contexto.partes(Rol.GARANTE)
+    return Source(contexto.seed).derive("objetivo_dni").rng.choice(partes).id
+
+
+def objetivo_titulo(contexto: ContextoLegajo) -> UUID:
+    """El garante cuyo título es de otra persona."""
+    garantes = contexto.partes(Rol.GARANTE)
+    return Source(contexto.seed).derive("objetivo_titulo").rng.choice(garantes).id
+
+
+# --- set forzado ---
+
+# Casos difíciles que una inconsistencia necesita para darse (la caución corta necesita
+# caución). El set forzado los pide; en el sorteado, `es_aplicable` deja afuera el resto.
+CASOS_NECESARIOS: dict[Inconsistencia, list[CasoDificil]] = {
+    Inconsistencia.CAUCION_MAS_CORTA_QUE_EL_PLAZO: [CasoDificil.SEGURO_DE_CAUCION],
+}
+
+MAX_BUSQUEDA = 1_000
+
+
+def semillas_forzadas(inconsistencia: Inconsistencia, desde: int, cantidad: int) -> list[int]:
+    """Las primeras `cantidad` semillas desde `desde` donde la inconsistencia puede darse,
+    con los casos que necesita (`CASOS_NECESARIOS`)."""
+    casos = CASOS_NECESARIOS.get(inconsistencia, [])
+    semillas: list[int] = []
+    for seed in range(desde, desde + MAX_BUSQUEDA):
+        if len(semillas) == cantidad:
+            break
+        # El caso tiene que poder darse en el contrato (ej. la caución necesita garantes).
+        if all(caso_aplicable(c, generate_contrato(seed)) for c in casos) and es_aplicable(
+            inconsistencia, contexto_legajo(seed, casos)
+        ):
+            semillas.append(seed)
+    if len(semillas) < cantidad:
+        raise ValueError(f"{inconsistencia}: solo {len(semillas)} semillas en {MAX_BUSQUEDA}")
+    return semillas

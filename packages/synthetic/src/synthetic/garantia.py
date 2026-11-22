@@ -8,6 +8,7 @@ distinto del alquilado. Presentación propia y aseguradoras inventadas: nada imi
 registro de la propiedad ni a una empresa real.
 """
 
+from collections.abc import Callable
 from datetime import timedelta
 from uuid import UUID
 
@@ -82,9 +83,14 @@ def _valores_titulo(titulo: TituloPropiedad, source: Source) -> dict[str, str]:
 
 
 def generate_titulo_doc(
-    contexto: ContextoLegajo, persona_id: UUID, source: Source
+    contexto: ContextoLegajo,
+    persona_id: UUID,
+    source: Source,
+    ajustar: Callable[[TituloPropiedad], TituloPropiedad] | None = None,
 ) -> tuple[bytes, TituloPropiedad]:
     titulo = generate_titulo_data(contexto, persona_id, source)
+    if ajustar is not None:  # una inconsistencia, antes de imprimir
+        titulo = ajustar(titulo)
     valores = _valores_titulo(titulo, source)
     filas = [(ETIQUETAS_TITULO[c], v) for c, v in valores.items()]
     pdf = fichas.render_ficha(TITULO_TITULO, "Constancia de titularidad", filas)
@@ -93,7 +99,9 @@ def generate_titulo_doc(
 
 
 def generate_titulos(
-    seed: int, casos: list[CasoDificil] | None = None
+    seed: int,
+    casos: list[CasoDificil] | None = None,
+    ajustes: dict[UUID, Callable[[TituloPropiedad], TituloPropiedad]] | None = None,
 ) -> dict[UUID, tuple[bytes, TituloPropiedad]]:
     """Título de propiedad de cada garante que firma el contrato (por `Persona.id`).
 
@@ -101,7 +109,9 @@ def generate_titulos(
     """
     contexto = contexto_legajo(seed, casos)
     return {
-        p.id: generate_titulo_doc(contexto, p.id, Source(seed).derive(f"titulo:{p.id}"))
+        p.id: generate_titulo_doc(
+            contexto, p.id, Source(seed).derive(f"titulo:{p.id}"), (ajustes or {}).get(p.id)
+        )
         for p in contexto.partes(Rol.GARANTE)
     }
 
@@ -145,13 +155,17 @@ def _valores_caucion(poliza: PolizaCaucion, source: Source) -> dict[str, str]:
 
 
 def generate_caucion(
-    seed: int, casos: list[CasoDificil] | None = None
+    seed: int,
+    casos: list[CasoDificil] | None = None,
+    ajustar: Callable[[PolizaCaucion], PolizaCaucion] | None = None,
 ) -> tuple[bytes, PolizaCaucion] | None:
     """Póliza de caución del contrato de la semilla; None si no tiene el caso."""
     contexto = contexto_legajo(seed, casos)
     if CasoDificil.SEGURO_DE_CAUCION not in contexto.casos:
         return None
     poliza = generate_caucion_data(contexto)
+    if ajustar is not None:  # una inconsistencia, antes de imprimir
+        poliza = ajustar(poliza)
     valores = _valores_caucion(poliza, Source(seed).derive("poliza_caucion"))
     filas = [(etiqueta, valores[campo]) for campo, etiqueta in ETIQUETAS_CAUCION.items()]
     pdf = fichas.render_ficha(TITULO_CAUCION, "Póliza de caución", filas)

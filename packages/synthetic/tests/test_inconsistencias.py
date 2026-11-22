@@ -12,7 +12,15 @@ import pytest
 from pydantic import BaseModel
 
 from core.legajo import Etapa, TipoAlerta
-from core.models import ReciboSueldo, Rol, TipoDocumento, cuit_valido
+from core.models import (
+    DNI,
+    PolizaCaucion,
+    ReciboSueldo,
+    Rol,
+    TipoDocumento,
+    TituloPropiedad,
+    cuit_valido,
+)
 from synthetic.cases import CasoDificil
 from synthetic.fotografiado import (
     DocumentoGenerado,
@@ -25,19 +33,26 @@ from synthetic.identity import cuit_from_dni
 from synthetic.inconsistencias import (
     ALERTA_DE,
     ANTIGUEDAD_MAXIMA_RECIBO_MESES,
-    IMPLEMENTADAS,
+    CASOS_NECESARIOS,
     P_INCONSISTENCIA,
     Inconsistencia,
     PlanRecibos,
+    acortar_caucion,
     compatibles,
     correr_neto,
     cuil_ajeno,
     elegir_inconsistencias,
     es_aplicable,
+    objetivo_dni,
     objetivo_recibos,
+    objetivo_titulo,
     plan_recibos,
+    semillas_forzadas,
+    titulo_ajeno,
+    vencer_dni,
 )
-from synthetic.legajo import contexto_legajo, sumar_meses
+from synthetic.dni import sumar_anios
+from synthetic.legajo import contexto_legajo, fin_de_contrato, sumar_meses
 from synthetic.recibo import alquiler_en_pesos, generate_recibos_meses
 from synthetic.source import Source
 
@@ -75,18 +90,20 @@ def test_caucion_corta_solo_con_caucion():
     assert es_aplicable(Inconsistencia.CAUCION_MAS_CORTA_QUE_EL_PLAZO, con_caucion)
 
 
-def test_sorteo_determinista_y_solo_implementadas():
+def test_sorteo_determinista_y_solo_aplicables():
     vistas: Counter = Counter()
     for seed in range(200):
         contexto = contexto_legajo(seed)
         elegidas = elegir_inconsistencias(contexto)
         assert elegidas == elegir_inconsistencias(contexto)
-        assert set(elegidas) <= IMPLEMENTADAS
+        assert all(es_aplicable(i, contexto) for i in elegidas)
         assert elegidas == [i for i in Inconsistencia if i in elegidas]  # orden del enum
         vistas.update(elegidas)
-    # Con p = 0,06 en 200 legajos, cada implementada sale varias veces.
-    for inconsistencia in IMPLEMENTADAS:
-        assert vistas[inconsistencia] >= 3
+    # Con p = 0,06 en 200 legajos, cada una sale alguna vez; la caución corta no, porque
+    # necesita el caso de caución (5 %): esa se cubre con el set forzado.
+    for inconsistencia in Inconsistencia:
+        if inconsistencia != Inconsistencia.CAUCION_MAS_CORTA_QUE_EL_PLAZO:
+            assert vistas[inconsistencia] >= 1, inconsistencia
 
 
 # --- quitar_documentos (sin fotos: rápido) ---
@@ -161,10 +178,10 @@ def test_sin_inconsistencias_no_hay_faltantes():
     assert legajo.esperado.faltantes == []
 
 
-def test_pedir_una_sin_implementar_falla():
-    pendiente = next(i for i in Inconsistencia if i not in IMPLEMENTADAS)
-    with pytest.raises(NotImplementedError):
-        generate_legajo(SEED_CHICO, inconsistencias=[pendiente])
+def test_pedir_una_que_no_aplica_falla():
+    """El legajo chico no tiene garantes: no puede tener un título ajeno."""
+    with pytest.raises(ValueError):
+        generate_legajo(SEED_CHICO, inconsistencias=[Inconsistencia.TITULAR_NO_ES_GARANTE])
 
 
 @pytest.fixture(scope="module")
@@ -194,11 +211,13 @@ def test_el_faltante_es_de_una_persona_del_legajo(con_faltante):
 
 @pytest.mark.parametrize("inconsistencia", list(Inconsistencia))
 def test_cada_inconsistencia_inyectada_tiene_su_alerta(inconsistencia):
-    if inconsistencia not in IMPLEMENTADAS:
-        pytest.xfail("se implementa en los pasos 6.2 y 6.3")
-    candidatas = [SEED_CHICO, *range(100)]  # el legajo chico primero: menos fotos
-    seed = next(s for s in candidatas if es_aplicable(inconsistencia, contexto_legajo(s)))
-    legajo = generate_legajo(seed, inconsistencias=[inconsistencia])
+    casos = CASOS_NECESARIOS.get(inconsistencia, [])
+    # El legajo chico primero (menos fotos). No tiene garantes, así que no admite los casos
+    # que los necesitan (la caución): ahí se usa la primera semilla del set forzado.
+    seed = SEED_CHICO
+    if casos or not es_aplicable(inconsistencia, contexto_legajo(seed)):
+        seed = semillas_forzadas(inconsistencia, 0, 1)[0]
+    legajo = generate_legajo(seed, casos=casos, inconsistencias=[inconsistencia])
     assert legajo.inconsistencias == [inconsistencia]
     alerta = ALERTA_DE[inconsistencia]
     if alerta is None:
@@ -286,9 +305,12 @@ def periodo_de(recibo: ReciboSueldo) -> date:
     return date.fromisoformat(f"{recibo.periodo}-01")
 
 
-def docs_con(seed: int, *inconsistencias: Inconsistencia) -> list[DocumentoGenerado]:
+def docs_con(
+    seed: int, *inconsistencias: Inconsistencia, casos: list[CasoDificil] | None = None
+) -> list[DocumentoGenerado]:
     """Los documentos (PDF y datos, sin fotos: rápido) con las inconsistencias pedidas."""
-    return documentos_del_legajo(contexto_legajo(seed), Etapa.EVALUACION, list(inconsistencias))
+    contexto = contexto_legajo(seed, casos)
+    return documentos_del_legajo(contexto, Etapa.EVALUACION, list(inconsistencias))
 
 
 def recibos_del_objetivo(seed: int, docs: list[DocumentoGenerado]) -> list[DocumentoGenerado]:
@@ -375,3 +397,106 @@ def test_el_faltante_no_quita_grupos_protegidos():
     for seed in range(30):
         _, quitados = quitar_documentos(DOCS, Source(seed), protegidos)
         assert quitados[0].tipo != TipoDocumento.DNI
+
+
+# --- paso 6.3: DNI, título y caución ---
+
+DNI_OK = DNI(
+    numero="30123456",
+    apellido="PÉREZ",
+    fecha_nacimiento=date(1985, 3, 2),
+    fecha_emision=date(2020, 5, 10),
+    fecha_vencimiento=date(2035, 5, 10),
+)
+REFERENCIA = date(2025, 10, 1)
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_dni_vencido_a_la_fecha_del_legajo(seed):
+    vencido = vencer_dni(DNI_OK, REFERENCIA, Source(seed))
+    assert vencido.fecha_vencimiento < REFERENCIA
+    assert vencido.fecha_emision == sumar_anios(vencido.fecha_vencimiento, -15)
+    assert vencido.model_dump(exclude={"fecha_emision", "fecha_vencimiento"}) == DNI_OK.model_dump(
+        exclude={"fecha_emision", "fecha_vencimiento"}
+    )
+
+
+TITULO = TituloPropiedad(
+    titular="Ana PÉREZ", inmueble="San Martín 1234, Mendoza", titular_dni="30123456"
+)
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_titulo_de_otra_persona(seed):
+    ajeno = titulo_ajeno(TITULO, Source(seed))
+    assert ajeno.titular != TITULO.titular
+    assert ajeno.titular_dni != TITULO.titular_dni
+    assert ajeno.inmueble == TITULO.inmueble
+
+
+CAUCION = PolizaCaucion(
+    aseguradora="Seguros Ficticios del Oeste S.A.",
+    vigencia_desde=date(2025, 10, 1),
+    vigencia_hasta=date(2027, 9, 30),
+)
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_caucion_corta_pero_despues_del_inicio(seed):
+    corta = acortar_caucion(CAUCION, Source(seed))
+    assert CAUCION.vigencia_desde < corta.vigencia_hasta < CAUCION.vigencia_hasta
+
+
+def alertados(docs: list[DocumentoGenerado], alerta: TipoAlerta) -> list[DocumentoGenerado]:
+    return [d for d in docs if alerta in d.alertas]
+
+
+@pytest.mark.parametrize("seed", [SEED_CHICO, SEED_COMPLETO])
+def test_solo_el_dni_del_objetivo_esta_vencido(seed):
+    contexto = contexto_legajo(seed)
+    docs = docs_con(seed, Inconsistencia.DNI_VENCIDO)
+    dnis = [d for d in docs if d.tipo == TipoDocumento.DNI]
+    vencidos = [d for d in dnis if d.datos.fecha_vencimiento < contexto.referencia]
+    assert [d.persona_id for d in vencidos] == [objetivo_dni(contexto)]
+    assert alertados(docs, TipoAlerta.DNI_VENCIDO) == vencidos
+
+
+def test_solo_el_titulo_del_objetivo_es_ajeno():
+    contexto = contexto_legajo(SEED_COMPLETO)
+    docs = docs_con(SEED_COMPLETO, Inconsistencia.TITULAR_NO_ES_GARANTE)
+    objetivo = objetivo_titulo(contexto)
+    for d in docs:
+        if d.tipo != TipoDocumento.GARANTIA:
+            continue
+        identidad = contexto.identidades[d.persona_id]
+        propio = d.datos.titular_dni == identidad.persona.dni
+        assert propio == (d.persona_id != objetivo)
+    assert [d.persona_id for d in alertados(docs, TipoAlerta.TITULAR_NO_ES_GARANTE)] == [
+        objetivo
+    ]
+
+
+def test_caucion_que_vence_antes_que_el_contrato():
+    casos = [CasoDificil.SEGURO_DE_CAUCION]
+    seed = semillas_forzadas(Inconsistencia.CAUCION_MAS_CORTA_QUE_EL_PLAZO, 0, 1)[0]
+    contexto = contexto_legajo(seed, casos)
+    docs = docs_con(seed, Inconsistencia.CAUCION_MAS_CORTA_QUE_EL_PLAZO, casos=casos)
+    [caucion] = alertados(docs, TipoAlerta.CAUCION_MAS_CORTA_QUE_EL_PLAZO)
+    assert caucion.persona_id is None
+    assert caucion.datos.vigencia_hasta < fin_de_contrato(contexto.limpio)
+
+
+@pytest.mark.parametrize("inconsistencia", list(Inconsistencia))
+def test_set_forzado_con_semillas_donde_aplica(inconsistencia):
+    semillas = semillas_forzadas(inconsistencia, 0, 3)
+    assert len(semillas) == 3
+    casos = CASOS_NECESARIOS.get(inconsistencia, [])
+    for seed in semillas:
+        assert es_aplicable(inconsistencia, contexto_legajo(seed, casos))
+
+
+def test_si_todo_tiene_alerta_no_hay_faltante():
+    docs = [replace(d, alertas=(TipoAlerta.DNI_VENCIDO,)) for d in DOCS]
+    restantes, quitados = quitar_documentos(docs, Source(1))
+    assert quitados == []
+    assert restantes == docs

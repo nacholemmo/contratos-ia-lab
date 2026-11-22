@@ -158,7 +158,7 @@ Pasos:
 5. ✅ Desorden: fotos mezcladas (orden sorteado), duplicadas (la misma foto, o el mismo
    documento sacado dos veces) e intrusas de clase `otro` (sintéticas: una factura de un
    servicio, una captura de chat, una foto sin documento).
-6. Inconsistencias inyectadas y etiquetadas (`Inconsistencia`, como `CasoDificil`), cada
+6. ✅ Inconsistencias inyectadas y etiquetadas (`Inconsistencia`, como `CasoDificil`), cada
    una con la alerta que el servicio debería levantar: recibo de otra persona, CUIL que no
    corresponde al DNI, DNI vencido, recibo viejo, neto que no cierra, titular del título
    que no es el garante, caución más corta que el plazo, ingreso insuficiente y documento

@@ -552,3 +552,21 @@ El paso 6 se dividió en tres:
 - **Dudas abiertas:**
   - En el recibo de otra persona, el documento queda asignado al inquilino que lo presentó. Revisarlo cuando se defina la asignación en la Fase 5.
   - Si a un legajo le tocan muchas inconsistencias, puede no quedar ningún grupo para quitar. Resolverlo en el 6.3, cuando se sumen las del DNI y la garantía.
+
+### 2026-11-22 — Fase 3, paso 6.3: DNI, título, caución y set forzado (cierra el paso 6)
+- **Qué construí** (todo Claude, a pedido mío para acelerar):
+  - `dni.py` y `garantia.py`: un punto de inyección `ajustar` / `ajustes` en `generate_dnis`, `generate_titulos` y `generate_caucion`, que cambia los datos antes de imprimirlos.
+  - `inconsistencias.py`:
+    - `vencer_dni`: vencido entre 1 mes y 3 años antes de la fecha del legajo; la emisión se corre junto con el vencimiento, así la vigencia de 15 años sigue cerrando.
+    - `titulo_ajeno`: el título a nombre de otra persona (`persona_ajena`, que también usan los recibos).
+    - `acortar_caucion`: vence entre 1 y 12 meses antes que el contrato, siempre después del inicio.
+    - `objetivo_dni` y `objetivo_titulo`.
+    - **El set forzado:** `semillas_forzadas` busca semillas donde aplica cada inconsistencia, con `CASOS_NECESARIOS` (la caución corta necesita `SEGURO_DE_CAUCION`). Escribirlo a disco es del paso 7.
+  - `generate_legajo` falla si se pide una inconsistencia que no aplica a la semilla. Si no queda nada que pueda faltar, el faltante no se inyecta ni se registra.
+  - **Verificado:** `uv run pytest packages/synthetic`, con todo en verde. Las 9 inconsistencias tienen su alerta o su faltante en el ground truth, que era el criterio de "Terminado cuando".
+- **Qué aprendí:**
+  - **Ajustes como funciones:** los generadores de documentos abren un punto de extensión y no saben nada de inconsistencias. Lo que se rompe se define en un solo lugar.
+  - **Lo que no aplica no se fuerza:** el test central fallaba porque pedía la caución en un legajo sin garantes. Primero se pregunta si aplica, con algo barato que no falla, y recién después se construye.
+  - **Una sub-fuente por inconsistencia:** sumar una no cambia las demás de la misma semilla.
+- **Dudas abiertas:**
+  - Un DNI vencido de alguien muy joven puede tener una emisión anterior a los 14 años. Es aceptable para el cruce, pero revisarlo si el extractor valida la edad.
