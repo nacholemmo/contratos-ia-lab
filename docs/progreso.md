@@ -598,3 +598,19 @@ El paso 6 se dividió en tres:
   - el dataset en `data/synthetic/fotografiado/` como entrada de la Fase 4 (extracción) y de las evals de la Fase 6;
   - `ingreso_insuficiente` y `ANTIGUEDAD_MAXIMA_RECIBO_MESES` como referencia para los cruces determinísticos de la Fase 5;
   - el patrón de ajustes (datos → inyectar → imprimir) para sumar inconsistencias nuevas.
+
+### 2026-11-23 — Fase 4, paso 1: entrada de fotos y PDF
+- **Reparto de la Fase 4:** paso a paso. En cada paso decido si la pieza clave la escribo yo o Claude.
+- **Qué construí** (Claude, a pedido mío):
+  - `extractor/documento.py`:
+    - `detectar_formato`: el formato sale de los magic bytes, no de la extensión. Es una lista blanca: PDF, JPG, PNG y HEIC.
+    - Las fotos se enderezan según el EXIF, pasan a RGB y se reducen a 1568 px de lado largo, sin agrandarse nunca. Salen como JPG sin EXIF.
+    - Los PDF dan una página por hoja, con su imagen y su capa de texto (`None` si es un escaneo).
+    - Límites: 25 MB, 20 páginas y 60 MP. Los píxeles se controlan antes de decodificar, y todo archivo roto termina en `EntradaInvalida`.
+    - `cargar_documento` arma un documento con varios archivos en orden (frente y dorso).
+  - Dependencia nueva: `pillow-heif`, para las fotos de iPhone.
+  - **Verificado:** `uv run pytest packages/extractor/tests/test_documento.py`, 31 passed.
+- **Qué aprendí:**
+  - **Magic bytes y lista blanca:** la extensión la elige quien sube el archivo. HEIC usa el mismo contenedor que el MP4, así que hay que mirar la marca después de `ftyp`.
+  - **Decompression bomb:** un PNG de menos de 100 KB puede declarar 100 MP. `Image.open` solo lee el encabezado, así que se controla antes de `load()`.
+  - **La salida va sin EXIF:** ya está derecha, y si conservara la orientación, un visor la volvería a girar.

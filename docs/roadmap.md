@@ -176,7 +176,7 @@ por campo y advertencias, para DNI, recibo de sueldo y garantía.
 Conceptos: salidas estructuradas, validación y reintentos, entrada multimodal, ruteo por
 tipo, prompt injection.
 Pasos:
-1. Entrada de fotos: JPG, PNG y HEIC además de PDF; convertir HEIC, enderezar según EXIF y
+1. ✅ Entrada de fotos: JPG, PNG y HEIC además de PDF; convertir HEIC, enderezar según EXIF y
    reducir a 1568 px de lado largo. Un documento puede ser varias fotos (frente y dorso).
 2. Esquema de extracción derivado de los modelos de core, sin los campos internos (ids)
    para que el LLM no los invente.
