@@ -570,3 +570,31 @@ El paso 6 se dividió en tres:
   - **Una sub-fuente por inconsistencia:** sumar una no cambia las demás de la misma semilla.
 - **Dudas abiertas:**
   - Un DNI vencido de alguien muy joven puede tener una emisión anterior a los 14 años. Es aceptable para el cruce, pero revisarlo si el extractor valida la edad.
+
+### 2026-11-23 — Fase 3, paso 7: la CLI del legajo fotografiado
+- **Qué construí** (Claude):
+  - `synthetic/export_fotografiado.py`: `write_legajo_fotografiado` genera, desordena y escribe cada semilla en `fotos/`, `datos/`, `esperado.json` (el `LegajoEsperado`) y `legajo.json` (el índice: casos, inconsistencias y con qué modelo valida cada JSON).
+  - `write_forzados_fotografiado`: N legajos por inconsistencia, con esa sola y sin casos difíciles, salvo los que necesita.
+  - `write_manifest_fotografiado`: el resumen del set. `leer_esperado` y `validar_datos` son para las evals.
+  - `cli.py`: `--modo fotografiado`, `--etapa`, `--nivel` y `--por-inconsistencia`. El modo `contratos` de la Fase 1 sigue siendo el que corre por defecto.
+  - **Verificado:**
+    - `uv run pytest packages/synthetic/tests/test_export_fotografiado.py`, en verde.
+    - `generate --modo fotografiado --etapa evaluacion --n 50` dio 50 legajos sorteados (36 cierran) y 27 forzados (3 por inconsistencia): 708 fotos, con 45 intrusas, 83 duplicadas y 22 ilegibles.
+    - Los 77 legajos validan contra `core` y cada inconsistencia tiene su alerta.
+    - Revisión a ojo de la semilla 89 (DNI vencido y recibo viejo): el dorso del DNI vence en 2020, el recibo es de 01/2023, la ilegible no se lee y la intrusa es una foto de la mesa.
+- **Qué aprendí:**
+  - **Un dataset de evals tiene que describirse solo:** `esperado.json` valida con `core` sin importar el generador, y `legajo.json` dice con qué modelo valida cada JSON (con `garantia` no alcanza para saber si es un título o una caución).
+  - **El set sorteado no alcanza para los casos raros:** el título ajeno y la caución corta salieron 0 veces en 50. El set forzado garantiza 3 de cada una.
+- **Dudas abiertas:**
+  - Generar el set tardó unas 2 h 17 min, por el render de cada foto. Si las evals necesitan regenerarlo seguido, paralelizar por semilla (cada una es independiente) o cachear.
+
+### Cierre de la Fase 3: legajo fotografiado en el generador
+- **Terminado cuando:** "hay 50 legajos fotografiados de etapa 1 con su `LegajoEsperado` y un set forzado por inconsistencia; la misma semilla da los mismos bytes; un test verifica que cada inconsistencia inyectada tiene su alerta en el ground truth; y una muestra de fotos se revisó a ojo". Se cumple:
+  - los 50 legajos y los 27 forzados;
+  - `test_misma_semilla_mismos_bytes`, en memoria y en disco;
+  - `test_cada_inconsistencia_inyectada_tiene_su_alerta`, también sobre lo escrito;
+  - la revisión a ojo de las intrusas y de la semilla 89.
+- **Lo que deja para las fases siguientes:**
+  - el dataset en `data/synthetic/fotografiado/` como entrada de la Fase 4 (extracción) y de las evals de la Fase 6;
+  - `ingreso_insuficiente` y `ANTIGUEDAD_MAXIMA_RECIBO_MESES` como referencia para los cruces determinísticos de la Fase 5;
+  - el patrón de ajustes (datos → inyectar → imprimir) para sumar inconsistencias nuevas.

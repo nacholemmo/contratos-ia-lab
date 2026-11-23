@@ -163,7 +163,7 @@ Pasos:
    corresponde al DNI, DNI vencido, recibo viejo, neto que no cierra, titular del título
    que no es el garante, caución más corta que el plazo, ingreso insuficiente y documento
    faltante. Set sorteado y set forzado por inconsistencia.
-7. CLI: `generate --modo fotografiado --etapa evaluacion`, con el manifest de casos e
+7. ✅ CLI: `generate --modo fotografiado --etapa evaluacion`, con el manifest de casos e
    inconsistencias.
 Terminado cuando: hay 50 legajos fotografiados de etapa 1 con su `LegajoEsperado` y un set
 forzado por inconsistencia; la misma semilla da los mismos bytes; un test verifica que
