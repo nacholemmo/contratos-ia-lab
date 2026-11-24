@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Legajos de alquiler</title>
+<meta name="description" content="Un servicio de IA en construcción que arma el legajo de un alquiler a partir de fotos desordenadas, evaluado con datos sintéticos generados sin IA.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Legajos de alquiler con IA">
+<meta property="og:description" content="De fotos sueltas a un legajo armado. Evaluado con datos sintéticos generados sin IA, a partir de una semilla.">
+<meta property="og:url" content="https://contratos-ia-lab.onrender.com/">
+<meta property="og:image" content="https://contratos-ia-lab.onrender.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="627">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Inter+Tight:wght@700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE everyday-to-work: an honest build log for one real niche, precise and calm
+   IDEA the legajo of an alquiler: a pile of WhatsApp photos turned into one ordered folder
+   PICTURE messy phone photos (DNI front/back, recibos, an intruder, a blurry one) becoming a suggested legajo with an alert
+   COLOUR warm paper ground, deep ink, green for what the code decides, amber for the AI step and alerts
+   TYPE Inter Tight 800 display + Inter text + JetBrains Mono for code and file names
+   LAYOUT title across the top, picture full width beneath; bands: problem, AI vs code + snippet, seed generator + snippet, results, roadmap */
+:root{color-scheme:light dark;--bg:light-dark(#F6F4EE,#13181a);--card:light-dark(#ffffff,#1c2326);--ink:light-dark(#1E2A22,#E9EEEA);--muted:light-dark(#5E6B62,#9fb0a6);--line:light-dark(#D6D9D1,#2f3a3d);--green:light-dark(#2E7D4F,#5cc28a);--gs:light-dark(#E3F0E7,#1d3428);--amber:light-dark(#C27F10,#f0b04a);--as:light-dark(#FBEFD9,#3a2d14);--manila:light-dark(#E9CF92,#8a7240);--manila2:light-dark(#DDBE76,#6e5a30);--band:light-dark(#EDEAE1,#181f21)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.6 Inter,system-ui,sans-serif;overflow-x:clip}
+.band{padding-block:clamp(36px,5vw,72px);padding-inline:max(5vw,16px)}
+.wrap{max-width:1160px;margin:0 auto}
+.alt{background:var(--band)}
+h1,h2{font-family:"Inter Tight",Inter,sans-serif;font-weight:800;letter-spacing:-.02em;line-height:1.05;text-wrap:balance;margin:0}
+h1{font-size:clamp(36px,5.2vw,58px);max-width:15em}
+h2{font-size:clamp(28px,3.4vw,40px);max-width:20em}
+p{margin:.8em 0 0;max-width:62ch}
+.lead{font-size:clamp(17px,1.6vw,19px);color:var(--muted)}
+.wip{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:14px;color:var(--amber);background:var(--as);border-radius:999px;padding:6px 14px;margin-bottom:18px}
+.wip i{width:8px;height:8px;border-radius:50%;background:var(--amber);animation:blink 1.6s infinite}
+@keyframes blink{50%{opacity:.25}}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+
+/* hero */
+.stage{margin-top:34px;display:grid;grid-template-columns:minmax(0,1fr) 76px minmax(0,1.1fr);align-items:center;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:clamp(18px,3vw,34px)}
+.pile{position:relative;height:330px;background:repeating-linear-gradient(45deg,var(--band) 0 10px,transparent 10px 20px);border-radius:14px}
+.ph{position:absolute;width:118px;height:150px;background:#fff;color:#1E2A22;border-radius:6px;box-shadow:0 2px 0 rgba(0,0,0,.06),0 8px 16px rgba(0,0,0,.12);padding:9px;font-size:12px;font-weight:700;animation:drift 6s ease-in-out infinite}
+.ph span{display:block;height:5px;border-radius:3px;background:#E6E3DA;margin-top:7px}
+.ph span:nth-child(odd){width:75%}
+.ph small{position:absolute;left:8px;top:132px;font:500 10.5px "JetBrains Mono",monospace;color:#7b857e}
+.ph.bad{background:#FFF4E2}.ph.blur{filter:blur(1.3px)}
+@keyframes drift{0%,100%{transform:translate(0,0) rotate(var(--r))}50%{transform:translate(var(--dx),-6px) rotate(calc(var(--r) * -.6))}}
+.arrow{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--amber);font-weight:700;font-size:13px;text-align:center}
+.arrow b{width:58px;height:58px;border-radius:50%;background:var(--as);display:grid;place-items:center;font-size:15px}
+.arrow svg{width:46px;height:20px}
+.leg{display:grid;gap:10px}
+.who{background:var(--bg);border-radius:12px;padding:12px 14px}
+.who h4{margin:0 0 8px;font-size:15px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.who h4 small{color:var(--muted);font-weight:500;font-size:13px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:13px;font-weight:600;border-radius:999px;padding:4px 10px;background:var(--gs);color:var(--green);white-space:nowrap}
+.chip.x{background:var(--band);color:var(--muted)}
+.alert{display:flex;gap:10px;align-items:flex-start;background:var(--as);color:var(--ink);border-radius:12px;padding:11px 14px;font-size:14.5px}
+.alert b{color:var(--amber);white-space:nowrap}
+.note{font-size:13px;color:var(--muted);margin-top:12px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(16em,1fr));gap:20px;margin-top:26px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+.card h3{margin:0 0 6px;font-size:18px}
+.card p{margin:0;font-size:15px;color:var(--muted)}
+.alerts{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.alerts span{font-size:14.5px;font-weight:600;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--amber);border-radius:10px;padding:8px 12px}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;margin-top:26px}
+.side{border-radius:18px;padding:22px 24px}
+.side h3{margin:0 0 10px;font-size:20px}
+.side ul{margin:0;padding-left:1.1em}.side li{margin:7px 0}
+.ai{background:var(--as)}.ai h3{color:var(--amber)}
+.code{background:var(--gs)}.code h3{color:var(--green)}
+.snip{margin-top:22px;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:22px;align-items:start}
+.snip p{margin:0}
+pre{margin:0;overflow-x:auto;background:#162019;color:#E7EFE9;border-radius:14px;padding:18px 20px;font:13.5px/1.6 "JetBrains Mono",ui-monospace,monospace}
+pre .c{color:#8fa79a}pre .k{color:#7fd6a2}pre .s{color:#f0c26a}
+.file{font:600 13px "JetBrains Mono",monospace;color:var(--muted);margin:0 0 8px}
+.flow{margin-top:26px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.fs{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;position:relative}
+.fs b{display:block;font-size:15.5px}
+.fs p{margin:6px 0 0;font-size:13.5px;color:var(--muted)}
+.fs .n{font:700 12px "JetBrains Mono",monospace;color:var(--green)}
+.seedpill{display:inline-block;font:700 15px "JetBrains Mono",monospace;background:var(--ink);color:var(--bg);border-radius:8px;padding:2px 9px;animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(1.07)}}
+.res{margin-top:26px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px 24px}
+.rh{display:grid;grid-template-columns:12em minmax(0,1fr) 5em 6em 7em;gap:12px;font-size:13px;color:var(--muted);font-weight:600;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.rr{display:grid;grid-template-columns:12em minmax(0,1fr) 5em 6em 7em;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px}
+.rr:last-child{border-bottom:0}
+.rr .nm{font-weight:700}
+.trk{height:16px;background:var(--band);border-radius:4px;overflow:hidden}
+.bar{height:100%;background:#9AA49C;border-radius:0 4px 4px 0;transform-origin:left;animation:grow 1.2s ease-out both}
+.win .bar{background:var(--green)}.win .nm{color:var(--green)}
+@keyframes grow{from{transform:scaleX(0)}}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cap{font-size:13.5px;color:var(--muted);margin-top:12px}
+.road{margin-top:26px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media(max-width:760px){.road{grid-template-columns:minmax(0,1fr)}}
+.st{border-radius:14px;padding:14px 16px;background:var(--card);border:1px solid var(--line)}
+.st h3{margin:0;font-size:15.5px;line-height:1.3}
+.st p{margin:6px 0 0;font-size:13.5px;color:var(--muted)}
+.tag{display:inline-block;font-size:12.5px;font-weight:700;border-radius:999px;padding:3px 10px;margin-bottom:8px}
+.done{background:var(--gs);color:var(--green)}.now{background:var(--as);color:var(--amber)}.next{background:var(--band);color:var(--muted)}
+.st.is-done{border-color:var(--green)}.st.is-now{border-color:var(--amber)}
+footer{font-size:14px;color:var(--muted)}footer b{color:var(--ink)}
+@media(max-width:900px){.stage{grid-template-columns:minmax(0,1fr)}.arrow{flex-direction:row;justify-content:center}.arrow svg{transform:rotate(90deg)}.flow{grid-template-columns:repeat(2,minmax(0,1fr))}.snip{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:640px){.split{grid-template-columns:minmax(0,1fr)}.flow{grid-template-columns:minmax(0,1fr)}.rh{display:none}.rr{grid-template-columns:minmax(0,1fr) auto;row-gap:6px}.rr .trk{grid-column:1/-1;grid-row:2}.rr .nm{grid-column:1}.rr .acc{grid-column:2;grid-row:1}.rr .ex,.rr .usd{grid-row:3;text-align:left}.rr .usd{text-align:right}.pile{height:300px}.ph{width:100px;height:128px}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+</style></head><body>
+<header class="band"><div class="wrap">
+  <div class="wip"><i></i>En construcción</div>
+  <h1>Armar el legajo de un alquiler a partir de las fotos que manda el inquilino.</h1>
+  <p class="lead">Estoy construyendo un servicio de IA que recibe fotos desordenadas (DNI, recibos, garantías, alguna borrosa o de otra cosa) y devuelve el legajo armado: cada documento en su lugar, los datos con su evidencia y las alertas de lo que no cierra.</p>
+
+  <div class="stage" aria-label="De las fotos sueltas al legajo sugerido">
+    <div class="pile" aria-hidden="true">
+      <div class="ph" style="left:4%;top:6%;--r:-8deg;--dx:6px">DNI · frente<span></span><span></span><span></span><span></span><small>IMG_4821.jpg</small></div>
+      <div class="ph blur" style="left:30%;top:2%;--r:5deg;--dx:-5px;animation-delay:.4s">Recibo<span></span><span></span><span></span><span></span><span></span><small>IMG_4826.jpg</small></div>
+      <div class="ph" style="left:58%;top:8%;--r:-3deg;--dx:4px;animation-delay:.8s">DNI · dorso<span></span><span></span><span></span><small>IMG_4822.jpg</small></div>
+      <div class="ph bad" style="left:12%;top:47%;--r:7deg;--dx:-6px;animation-delay:1.2s">Factura de luz<span></span><span></span><span></span><small>IMG_4830.jpg</small></div>
+      <div class="ph" style="left:40%;top:44%;--r:-6deg;--dx:5px;animation-delay:1.6s">Título<span></span><span></span><span></span><span></span><small>IMG_4828.jpg</small></div>
+      <div class="ph" style="left:66%;top:50%;--r:4deg;--dx:-4px;animation-delay:2s">Recibo<span></span><span></span><span></span><span></span><small>IMG_4826 (1).jpg</small></div>
+    </div>
+    <div class="arrow"><b>IA</b><svg viewBox="0 0 46 20" aria-hidden="true"><path d="M2 10h38M32 3l9 7-9 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>clasifica, agrupa y asigna</div>
+    <div class="leg">
+      <div class="who"><h4>Lucía Ferreyra <small>inquilina</small></h4><div class="chips"><span class="chip">DNI frente + dorso</span><span class="chip">Recibo de sueldo</span></div></div>
+      <div class="who"><h4>Martín Quiroga <small>garante</small></h4><div class="chips"><span class="chip">Título de propiedad</span></div></div>
+      <div class="who"><h4>Descartadas <small>2 fotos</small></h4><div class="chips"><span class="chip x">Factura de luz: de otra cosa</span><span class="chip x">Recibo repetido</span></div></div>
+      <div class="alert"><b>Faltante</b><span>Recibos de Lucía: se pidieron los últimos 3 y llegó 1. Lo calcula el código, no la IA.</span></div>
+    </div>
+  </div>
+  <p class="note">Todo lo que se ve en esta página es sintético: las personas, los documentos y las fotos no existen.</p>
+</div></header>
+
+<section class="band alt"><div class="wrap">
+  <h2>El trabajo pesado está antes de firmar</h2>
+  <p>Para alquilar, la inmobiliaria junta y revisa los papeles del inquilino y de los garantes. Llegan como fotos sueltas por WhatsApp o mail: el frente y el dorso del DNI por separado, recibos de meses salteados, títulos de varias páginas, alguna foto borrosa, repetida o de otra cosa. Alguien tiene que ordenarlas, ver de quién es cada una y revisar que todo cierre.</p>
+  <div class="cols">
+    <div class="card"><h3>Desordenado</h3><p>Fotos mezcladas, con nombres como IMG_4821.jpg, que no dicen qué documento son ni de quién.</p></div>
+    <div class="card"><h3>Incompleto</h3><p>Falta el dorso del DNI, faltan recibos, el garante todavía no mandó el título.</p></div>
+    <div class="card"><h3>El valor está en los cruces</h3><p>No alcanza con leer cada documento solo: hay que ver si todos cuentan la misma historia.</p></div>
+  </div>
+  <p style="margin-top:26px;font-weight:600">Los cruces que el servicio revisa:</p>
+  <div class="alerts"><span>Recibo de otra persona</span><span>CUIL que no corresponde al DNI</span><span>DNI vencido</span><span>Recibo viejo</span><span>Neto que no cierra</span><span>Titular que no es el garante</span><span>Caución más corta que el contrato</span><span>Ingreso insuficiente</span></div>
+</div></section>
+
+<section class="band"><div class="wrap">
+  <h2>La IA sugiere, el código decide y una persona confirma</h2>
+  <p>Al que arma el legajo no le sirve un chat: necesita un legajo ordenado en el que pueda confiar. Por eso la IA solo hace lo que requiere leer, y todo lo que es una regla o una cuenta lo hace código con tests.</p>
+  <div class="split">
+    <div class="side ai"><h3>Lo que hace la IA</h3><ul>
+      <li>Clasifica cada foto: DNI, recibo, garantía, contrato, seguro u otra cosa.</li>
+      <li>Junta las fotos que forman un mismo documento, como el frente y el dorso.</li>
+      <li>Asigna cada documento a una persona y su rol.</li>
+      <li>Extrae los datos, cada uno con la evidencia de dónde salió.</li></ul></div>
+    <div class="side code"><h3>Lo que hace el código</h3><ul>
+      <li>Calcula los cruces y las alertas.</li>
+      <li>Hace todas las cuentas de dinero y fechas, siempre con Decimal.</li>
+      <li>Detecta los faltantes según lo que pide la inmobiliaria.</li>
+      <li>Nada queda como definitivo sin que una persona lo confirme.</li></ul></div>
+  </div>
+  <div class="snip">
+    <div><p class="file">synthetic/fotografiado.py</p>
+<pre><span class="k">def</span> ingreso_insuficiente(alquiler: Decimal, netos: dict[str, list[Decimal]]) -&gt; bool:
+    ultimos = [lista[0] <span class="k">for</span> lista <span class="k">in</span> netos.values() <span class="k">if</span> lista]
+    <span class="k">if not</span> ultimos:
+        <span class="k">return</span> False
+    <span class="k">return</span> sum(ultimos, Decimal(0)) &lt; alquiler * INGRESO_MINIMO_EN_ALQUILERES</pre></div>
+    <div><p><b>Un cruce son cuatro líneas de código, no una pregunta al modelo.</b></p><p style="margin-top:.6em">Se toma el neto del recibo más reciente de cada inquilino y se suman, porque alquilan juntos. Si no hay recibos, no hay alerta: es un faltante. El primer intento sumaba los tres recibos de cada persona y los comparaba con un mes de alquiler; no fallaba, daba una alerta equivocada. Lo atrapó un test de un centavo de diferencia.</p></div>
+  </div>
+</div></section>
+
+<section class="band alt"><div class="wrap">
+  <h2>Para medirlo, legajos generados sin IA a partir de una semilla</h2>
+  <p>Para evaluar una IA que lee documentos, los documentos de prueba no los genera una IA. Un generador determinístico arma cada legajo a partir de una semilla: el mismo número produce los mismos datos, las mismas fotos y la misma respuesta correcta, byte a byte. Así se sabe de antemano cómo tiene que quedar cada legajo.</p>
+  <div class="flow">
+    <div class="fs"><span class="n">1</span><b><span class="seedpill">4271</span></b><p>Personas coherentes: DNI y CUIT con dígito verificador válido, sueldos y alquiler.</p></div>
+    <div class="fs"><span class="n">2</span><b>Documentos</b><p>DNI en frente y dorso, 3 recibos de meses seguidos, título o caución.</p></div>
+    <div class="fs"><span class="n">3</span><b>Fotos de celular</b><p>Mesa, perspectiva, giro, sombra, flash y desenfoque, en tres niveles hasta ilegible.</p></div>
+    <div class="fs"><span class="n">4</span><b>Desorden</b><p>Duplicadas, intrusas y páginas movidas; después se mezcla y se renombra todo.</p></div>
+    <div class="fs"><span class="n">5</span><b>Inconsistencias</b><p>Recibos ajenos, DNI vencido, ingreso que no alcanza, cada una con su alerta esperada.</p></div>
+  </div>
+  <div class="snip">
+    <div><p class="file">synthetic/source.py</p>
+<pre><span class="k">def</span> derive(self, label: str) -&gt; <span class="s">"Source"</span>:
+    <span class="c"># Se usa sha256 y no hash(), porque hash() de un str
+    # cambia entre ejecuciones de Python.</span>
+    digest = hashlib.sha256(<span class="s">f"{self.seed}:{label}"</span>.encode()).digest()
+    <span class="k">return</span> Source(int.from_bytes(digest[:8], <span class="s">"big"</span>))</pre></div>
+    <div><p><b>Cada parte del legajo saca su azar de una sub-fuente propia.</b></p><p style="margin-top:.6em">Así, sumar una página o una intrusa no cambia el resto del legajo. Un detalle que hace la diferencia: las fotos se renombran después de mezclarlas. Si conservaran la numeración del legajo ordenado, IMG_4821, IMG_4822… delatarían qué fotos van juntas, y el clasificador podría acertar sin mirarlas.</p></div>
+  </div>
+</div></section>
+
+<section class="band"><div class="wrap">
+  <h2>Primer resultado: clasificar cada documento</h2>
+  <p>El primer paso del armado es saber qué es cada documento. Comparé reglas, vectores y un LLM (Claude Haiku) sobre los mismos 204 documentos, más 8 escaneos sin capa de texto.</p>
+  <div class="res" role="table" aria-label="Comparación de clasificadores">
+    <div class="rh" role="row"><span>Enfoque</span><span>Aciertos</span><span class="num">%</span><span class="num">Escaneos</span><span class="num">USD / 1.000 docs</span></div>
+    <div class="rr" role="row"><span class="nm">Reglas</span><div class="trk"><div class="bar" style="width:96.1%"></div></div><span class="num acc">96,1</span><span class="num ex">0 de 8</span><span class="num usd">0</span></div>
+    <div class="rr" role="row"><span class="nm">TF-IDF</span><div class="trk"><div class="bar" style="width:95.1%"></div></div><span class="num acc">95,1</span><span class="num ex">0 de 8</span><span class="num usd">0</span></div>
+    <div class="rr" role="row"><span class="nm">Embeddings</span><div class="trk"><div class="bar" style="width:95.1%"></div></div><span class="num acc">95,1</span><span class="num ex">0 de 8</span><span class="num usd">0</span></div>
+    <div class="rr" role="row"><span class="nm">LLM, primera versión</span><div class="trk"><div class="bar" style="width:99.5%"></div></div><span class="num acc">99,5</span><span class="num ex">8 de 8</span><span class="num usd">0,075</span></div>
+    <div class="rr" role="row"><span class="nm">LLM con 6 ejemplos</span><div class="trk"><div class="bar" style="width:100%"></div></div><span class="num acc">100</span><span class="num ex">8 de 8</span><span class="num usd">0,263</span></div>
+    <div class="rr win" role="row"><span class="nm">LLM, definición nueva</span><div class="trk"><div class="bar" style="width:100%"></div></div><span class="num acc">100</span><span class="num ex">8 de 8</span><span class="num usd">0,079</span></div>
+  </div>
+  <p class="cap">Con la definición nueva, acertó 565 de 565 documentos del set completo por USD 0,041: alrededor de USD 0,001 por legajo de 15 fotos. Ojo: son documentos sintéticos, armados con plantillas. La medición que importa viene con las fotos desordenadas.</p>
+  <div class="snip">
+    <div><p class="file">extractor/classify.py</p>
+<pre>GARANTIA_V2 = (
+    <span class="s">"título o constancia de titularidad de un inmueble (escritura, matrícula, titular), aunque "</span>
+    <span class="s">'no diga "garante"; o póliza de seguro de caución que garantiza un alquiler.'</span>
+)</pre></div>
+    <div><p><b>El error estaba en la definición, no en el modelo.</b></p><p style="margin-top:.6em">El LLM fallaba con títulos que dicen "constancia de titularidad de inmueble" y nunca "garante", porque la definición pedía el título "de un garante". Describir lo que se ve en el documento arregló lo mismo que 6 ejemplos, con 3,3 veces menos costo. Y es el único enfoque barato que lee fotos, que es justo lo que entra al servicio.</p></div>
+  </div>
+</div></section>
+
+<section class="band alt"><div class="wrap">
+  <h2>Dónde está el proyecto</h2>
+  <p>Lo construyo por fases, y cada una se mide contra los legajos sintéticos antes de pasar a la siguiente.</p>
+  <div class="road">
+    <div class="st is-done"><span class="tag done">Listo</span><h3>Generador sintético</h3><p>Contratos, DNI, recibos, garantías y seguros con su respuesta correcta.</p></div>
+    <div class="st is-done"><span class="tag done">Listo</span><h3>Clasificación de documentos</h3><p>Cinco enfoques comparados y un clasificador elegido.</p></div>
+    <div class="st is-now"><span class="tag now">En curso</span><h3>Legajo fotografiado</h3><p>Fotos de celular, desorden e inconsistencias, cada una con su alerta esperada.</p></div>
+    <div class="st"><span class="tag next">Próximo</span><h3>Extracción con evidencia</h3><p>Cada dato con el fragmento y la página de donde salió.</p></div>
+    <div class="st"><span class="tag next">Próximo</span><h3>Armado del legajo</h3><p>Agrupar, asignar, descartar y calcular faltantes y alertas.</p></div>
+    <div class="st"><span class="tag next">Después</span><h3>Evals, servidor MCP y agente</h3><p>Medición de punta a punta, la interfaz MCP y un agente para los casos ambiguos.</p></div>
+  </div>
+</div></section>
+
+<footer class="band"><div class="wrap">
+  <p><b>Legajos de alquiler con IA</b> · un proyecto de Ignacio Lemmo, en Mendoza, que voy contando en LinkedIn a medida que avanza. En el repo solo hay datos sintéticos.</p>
+</div></footer>
+</body></html>

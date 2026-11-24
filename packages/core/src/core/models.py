@@ -17,6 +17,21 @@ from pydantic import BaseModel, Field, field_validator
 # La moneda va en un campo aparte: hay contratos en pesos y en dólares.
 Monto = Annotated[Decimal, Field(ge=0, decimal_places=2)]
 
+
+
+class Interno:
+    """Marca de un campo interno (ids): lo asigna el sistema, nunca se le pide al LLM.
+
+    Va en `Annotated[UUID, INTERNO]`. El extractor deriva el esquema que ve el modelo sin
+    estos campos (`extractor/esquema.py`): si estuvieran, el LLM tendría que inventarlos.
+    """
+
+    def __repr__(self) -> str:
+        return "INTERNO"
+
+
+INTERNO = Interno()
+
 # Pesos oficiales para el dígito verificador del CUIT, aplicados a los primeros 10 dígitos.
 PESOS_CUIT = (5, 4, 3, 2, 7, 6, 5, 4, 3, 2)
 
@@ -79,7 +94,7 @@ def cuit_valido(cuit: str) -> bool:
 class Persona(BaseModel):
     """Persona física o jurídica que participa en un contrato."""
 
-    id: UUID = Field(default_factory=uuid4, description="ID interno; no lo genera el LLM")
+    id: Annotated[UUID, INTERNO] = Field(default_factory=uuid4, description="ID interno")
     nombre: str = Field(
         ...,
         min_length=1,
@@ -151,7 +166,7 @@ class Evidencia(BaseModel):
 class Contrato(BaseModel):
     """Contrato de locación. Cada dato clave lleva al lado su campo `<dato>_evidencia`."""
 
-    id: UUID = Field(default_factory=uuid4, description="ID interno; no lo genera el LLM")
+    id: Annotated[UUID, INTERNO] = Field(default_factory=uuid4, description="ID interno")
     partes: list[Persona] = Field(
         ..., min_length=2, description="Propietarios, inquilinos y garantes del contrato"
     )
@@ -429,13 +444,13 @@ class TipoDocumento(StrEnum):
 class Documento(BaseModel):
     """Archivo que entra al sistema y a qué persona o contrato está vinculado."""
 
-    id: UUID = Field(default_factory=uuid4, description="Identificador interno")
+    id: Annotated[UUID, INTERNO] = Field(default_factory=uuid4, description="ID interno")
     tipo: TipoDocumento = Field(..., description="Tipo de documento")
 
-    persona_id: UUID | None = Field(
+    persona_id: Annotated[UUID | None, INTERNO] = Field(
         None, description="ID de la persona a la que pertenece (si aplica)"
     )
-    contrato_ids: list[UUID] = Field(
+    contrato_ids: Annotated[list[UUID], INTERNO] = Field(
         default_factory=list, description="IDs de contratos a los que pertenece (si aplica)"
     )
     referencia_archivo: str = Field(
@@ -449,7 +464,9 @@ __all__ = [
     "Contrato",
     "Documento",
     "Evidencia",
+    "INTERNO",
     "Indice",
+    "Interno",
     "Moneda",
     "Monto",
     "Persona",
