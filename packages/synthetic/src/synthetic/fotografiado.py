@@ -114,9 +114,7 @@ def quitar_documentos(
     # Solo falta lo que entrega una persona (DNI, recibos, título): la caución, el contrato y
     # el seguro son del legajo y los pide la inmobiliaria, no la persona. Se quita el grupo
     # entero (los 3 recibos, no uno): "no trajo recibos" es el faltante más claro de medir.
-    grupos = list(
-        dict.fromkeys((d.tipo, d.persona_id) for d in docs_candidatos if d.persona_id)
-    )
+    grupos = list(dict.fromkeys((d.tipo, d.persona_id) for d in docs_candidatos if d.persona_id))
     if not grupos:  # todo tiene una alerta: no hay nada que pueda faltar
         return list(docs), []
     elegido = source.rng.choice(grupos)

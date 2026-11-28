@@ -22,6 +22,7 @@ from core.models import (
     cuit_valido,
 )
 from synthetic.cases import CasoDificil
+from synthetic.dni import sumar_anios
 from synthetic.fotografiado import (
     DocumentoGenerado,
     documentos_del_legajo,
@@ -51,7 +52,6 @@ from synthetic.inconsistencias import (
     titulo_ajeno,
     vencer_dni,
 )
-from synthetic.dni import sumar_anios
 from synthetic.legajo import contexto_legajo, fin_de_contrato, sumar_meses
 from synthetic.recibo import alquiler_en_pesos, generate_recibos_meses
 from synthetic.source import Source
@@ -146,9 +146,7 @@ def test_quitados_de_un_tipo_y_una_persona(seed):
 def test_restantes_en_el_orden_original(seed):
     restantes, _ = quitar_documentos(DOCS, Source(seed))
     orden = [d.nombre for d in DOCS]
-    assert [d.nombre for d in restantes] == sorted(
-        (d.nombre for d in restantes), key=orden.index
-    )
+    assert [d.nombre for d in restantes] == sorted((d.nombre for d in restantes), key=orden.index)
 
 
 def test_quitar_determinista():
@@ -315,17 +313,13 @@ def docs_con(
 
 def recibos_del_objetivo(seed: int, docs: list[DocumentoGenerado]) -> list[DocumentoGenerado]:
     objetivo = objetivo_recibos(contexto_legajo(seed))
-    return [
-        d for d in docs if d.tipo == TipoDocumento.RECIBO_SUELDO and d.persona_id == objetivo
-    ]
+    return [d for d in docs if d.tipo == TipoDocumento.RECIBO_SUELDO and d.persona_id == objetivo]
 
 
 @pytest.mark.parametrize("seed", [SEED_CHICO, SEED_COMPLETO])
 def test_recibo_de_otra_persona(seed):
     contexto = contexto_legajo(seed)
-    nombres = {
-        f"{i.apellido}, {i.nombre_pila}".upper() for i in contexto.identidades.values()
-    }
+    nombres = {f"{i.apellido}, {i.nombre_pila}".upper() for i in contexto.identidades.values()}
     recibos = recibos_del_objetivo(seed, docs_con(seed, Inconsistencia.RECIBO_DE_OTRA_PERSONA))
     assert len(recibos) == 3
     for d in recibos:
@@ -338,9 +332,7 @@ def test_cuil_que_no_corresponde(seed):
     contexto = contexto_legajo(seed)
     objetivo = contexto.identidades[objetivo_recibos(contexto)]
     propio = cuit_from_dni(objetivo.persona.dni, objetivo.sexo)
-    recibos = recibos_del_objetivo(
-        seed, docs_con(seed, Inconsistencia.CUIL_NO_CORRESPONDE_AL_DNI)
-    )
+    recibos = recibos_del_objetivo(seed, docs_con(seed, Inconsistencia.CUIL_NO_CORRESPONDE_AL_DNI))
     for d in recibos:
         assert d.datos.empleado_cuil != propio
         assert d.datos.empleado == f"{objetivo.apellido}, {objetivo.nombre_pila}".upper()
@@ -365,9 +357,7 @@ def test_sin_inconsistencias_el_ultimo_recibo_esta_vigente():
 def test_neto_que_no_cierra_en_un_solo_recibo(seed):
     recibos = recibos_del_objetivo(seed, docs_con(seed, Inconsistencia.NETO_NO_CIERRA))
     rotos = [
-        d
-        for d in recibos
-        if d.datos.neto != d.datos.remuneracion_bruta - d.datos.total_descuentos
+        d for d in recibos if d.datos.neto != d.datos.remuneracion_bruta - d.datos.total_descuentos
     ]
     assert len(rotos) == 1
     assert [d for d in recibos if TipoAlerta.NETO_NO_CIERRA in d.alertas] == rotos
@@ -471,9 +461,7 @@ def test_solo_el_titulo_del_objetivo_es_ajeno():
         identidad = contexto.identidades[d.persona_id]
         propio = d.datos.titular_dni == identidad.persona.dni
         assert propio == (d.persona_id != objetivo)
-    assert [d.persona_id for d in alertados(docs, TipoAlerta.TITULAR_NO_ES_GARANTE)] == [
-        objetivo
-    ]
+    assert [d.persona_id for d in alertados(docs, TipoAlerta.TITULAR_NO_ES_GARANTE)] == [objetivo]
 
 
 def test_caucion_que_vence_antes_que_el_contrato():

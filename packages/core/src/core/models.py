@@ -18,7 +18,6 @@ from pydantic import BaseModel, Field, field_validator
 Monto = Annotated[Decimal, Field(ge=0, decimal_places=2)]
 
 
-
 class Interno:
     """Marca de un campo interno (ids): lo asigna el sistema, nunca se le pide al LLM.
 

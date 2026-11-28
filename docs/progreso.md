@@ -614,3 +614,16 @@ El paso 6 se dividió en tres:
   - **Magic bytes y lista blanca:** la extensión la elige quien sube el archivo. HEIC usa el mismo contenedor que el MP4, así que hay que mirar la marca después de `ftyp`.
   - **Decompression bomb:** un PNG de menos de 100 KB puede declarar 100 MP. `Image.open` solo lee el encabezado, así que se controla antes de `load()`.
   - **La salida va sin EXIF:** ya está derecha, y si conservara la orientación, un visor la volvería a girar.
+
+### 2026-11-24 — Fase 4, paso 2: esquema de extracción sin ids
+- **Qué construí** (Claude, a pedido mío):
+  - `core.models.INTERNO`: marca explícita (`Annotated[UUID, INTERNO]`) en `Persona.id`, `Contrato.id` y los ids de `Documento`. No aparece en el JSON Schema.
+  - `extractor/esquema.py`:
+    - `esquema_extraccion(modelo)` deriva con `create_model` el modelo que ve el LLM, sin los campos internos y recursivo (`list[Persona]`, `X | None`, `Annotated`). Si no hay nada que sacar (DNI, recibo, título, pólizas), devuelve el mismo modelo. Está cacheado.
+    - `a_core(modelo, extraido)` valida lo extraído como el modelo de core: genera los ids y corre sus validadores (CUIT).
+  - **Verificado:** `uv run pytest packages/extractor/tests/test_esquema.py packages/core`. Un test recorre todos los modelos de core y falla si algún `uuid` llega a un esquema de extracción.
+- **Qué aprendí:**
+  - **Un campo en el schema obliga al LLM a llenarlo:** si el schema trae `id: UUID`, el modelo inventa uno. Lo que asigna el sistema no va en el schema.
+  - **Marca explícita, no heurística:** `clausulas` tiene valor por defecto y es un dato a extraer; un `numero_id` podría ser un dato real.
+  - **El modelo derivado no copia los `field_validator`:** el LLM llena una forma simple y las reglas de dominio corren en `a_core`. Ese `ValidationError` es el que el paso 3 le devuelve al modelo para que reintente.
+  - **La API no acepta `minLength` ni `minimum`:** el SDK de Python los saca del schema que manda y los valida del lado del cliente.

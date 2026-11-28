@@ -20,7 +20,8 @@ from uuid import UUID
 
 from core.legajo import TipoAlerta
 from core.models import DNI, PolizaCaucion, ReciboSueldo, Rol, Sexo, TituloPropiedad
-from synthetic.cases import CasoDificil, es_aplicable as caso_aplicable
+from synthetic.cases import CasoDificil
+from synthetic.cases import es_aplicable as caso_aplicable
 from synthetic.contracts import generate_contrato
 from synthetic.dni import VIGENCIA_DNI_ANIOS, sumar_anios
 from synthetic.identity import cuit_from_dni, generate_dni

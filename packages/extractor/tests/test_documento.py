@@ -3,6 +3,7 @@
 import io
 
 import pytest
+from pdf_fixtures import image_pdf, text_pdf
 from PIL import Image
 
 from extractor.documento import (
@@ -14,14 +15,11 @@ from extractor.documento import (
     cargar_documento,
     detectar_formato,
 )
-from pdf_fixtures import image_pdf, text_pdf
 
 EXIF_ORIENTACION = 0x0112
 
 
-def foto(
-    ancho: int, alto: int, formato: str = "JPEG", orientacion: int | None = None
-) -> bytes:
+def foto(ancho: int, alto: int, formato: str = "JPEG", orientacion: int | None = None) -> bytes:
     """Una imagen con la mitad izquierda negra: así se ve hacia dónde quedó girada."""
     imagen = Image.new("RGB", (ancho, alto), "white")
     imagen.paste((0, 0, 0), (0, 0, ancho // 2, alto))
